@@ -1,0 +1,898 @@
+<title>富士山登山立体图</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@700;900&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: full-screen 3D model of the mountain at night, a glass panel on the right (bottom sheet on phones),
+   route chips across the top. One deliberate dark world: the pre-dawn climb toward 御来光. */
+:root{
+  --sky-top:#070B16; --sky-low:#1A2340; --dawn:#F2A65A; --dawn-soft:rgba(242,166,90,.16);
+  --panel:rgba(13,18,33,.88); --panel-solid:#0F1526; --ink:#E9EDF5; --mute:#97A3BC; --faint:#5E6A84;
+  --line:rgba(160,180,220,.14); --chip:rgba(255,255,255,.06);
+  --Y:#F2C230; --S:#E9493E; --G:#3DB36B; --F:#3E86F0; --X:#D9DEE8; --P:#B48CF2;
+  --serif:"Noto Serif SC","Songti SC","STSong",serif;
+  --sans:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%;margin:0;background:var(--sky-top);color:var(--ink);font-family:var(--sans);overflow:hidden}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--dawn);outline-offset:2px}
+#app{position:fixed;inset:0;background:radial-gradient(120% 70% at 50% 108%,#3A2E3E 0%,#1A2340 38%,var(--sky-top) 78%)}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#pins{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+
+/* top bar */
+.top{position:absolute;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top,0px) + 14px) max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:10px;pointer-events:none;z-index:5}
+.brand{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.brand h1{margin:0;font-family:var(--serif);font-weight:900;font-size:clamp(20px,2.4vw,28px);letter-spacing:.04em;text-shadow:0 2px 12px rgba(0,0,0,.6)}
+.brand h1 b{color:var(--dawn);font-family:var(--mono);font-weight:700;font-size:.78em;margin-left:.3em;letter-spacing:0}
+.brand span{color:var(--mute);font-size:12.5px;text-shadow:0 1px 6px #000}
+.chips{display:flex;gap:6px;flex-wrap:wrap;pointer-events:auto;max-width:calc(100% - 400px)}
+.chip{display:inline-flex;align-items:center;gap:7px;padding:6px 11px 6px 9px;border-radius:999px;border:1px solid var(--line);background:rgba(10,14,26,.72);backdrop-filter:blur(8px);cursor:pointer;font-size:13px;white-space:nowrap;transition:background .15s,border-color .15s}
+.chip i{width:10px;height:10px;border-radius:50%;background:var(--c);box-shadow:0 0 0 2px rgba(0,0,0,.35)}
+.chip small{color:var(--mute);font-family:var(--mono);font-size:11px}
+.chip:hover{border-color:rgba(255,255,255,.3)}
+.chip[aria-pressed="true"]{background:color-mix(in srgb,var(--c) 22%,rgba(10,14,26,.85));border-color:var(--c)}
+
+/* pins */
+.pin{position:absolute;left:0;top:0;pointer-events:auto;border:0;background:none;padding:0;cursor:pointer;will-change:transform}
+.pin .dot{position:absolute;left:-5px;top:-5px;width:10px;height:10px;border-radius:50%;background:var(--c);border:2px solid #0B0F1C;box-shadow:0 0 0 1px rgba(255,255,255,.5)}
+.pin.hut .dot{width:8px;height:8px;left:-4px;top:-4px;border-radius:2px;transform:rotate(45deg);background:#FFF6E6;border:1.5px solid var(--c)}
+.pin.mark .dot{background:var(--dawn);border-color:#2A1A08;width:9px;height:9px;left:-4.5px;top:-4.5px}
+.pin .lab{position:absolute;left:9px;top:-10px;white-space:nowrap;font-size:12px;line-height:20px;padding:0 7px;border-radius:4px;background:rgba(8,11,22,.78);border-left:2px solid var(--c);color:var(--ink);opacity:0;transition:opacity .12s}
+.pin .lab em{font-style:normal;font-family:var(--mono);color:var(--mute);font-size:10.5px;margin-left:5px}
+.pin.show .lab{opacity:1}
+.pin.mark .lab{border-left-color:var(--dawn)}
+.pin.dim{opacity:.28}
+.pin.sel .dot{box-shadow:0 0 0 3px var(--dawn),0 0 18px var(--dawn)}
+.pin.hidden{display:none}
+#probe{position:absolute;left:0;top:0;pointer-events:none;display:none}
+#probe .ring{position:absolute;left:-9px;top:-9px;width:18px;height:18px;border-radius:50%;border:2px solid #fff;background:var(--c);box-shadow:0 0 0 4px rgba(255,255,255,.18),0 0 22px var(--c)}
+#probe .read{position:absolute;left:14px;top:-34px;white-space:nowrap;font:500 12px/1.35 var(--sans);background:rgba(8,11,22,.9);border:1px solid var(--line);border-radius:6px;padding:4px 8px}
+#probe .read b{font-family:var(--mono)}
+
+/* info card */
+#card{position:absolute;z-index:8;width:300px;max-width:calc(100vw - 32px);background:var(--panel-solid);border:1px solid var(--line);border-radius:10px;padding:14px 14px 12px;box-shadow:0 18px 50px rgba(0,0,0,.55);font-size:13px;line-height:1.6}
+#card h3{margin:0 24px 2px 0;font-family:var(--serif);font-size:18px;line-height:1.3}
+#card .sub{color:var(--mute);font-size:12px;margin-bottom:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+#card .x{position:absolute;right:6px;top:6px;width:28px;height:28px;border:0;background:none;color:var(--mute);font-size:18px;cursor:pointer;border-radius:6px}
+#card .x:hover{background:var(--chip)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:6px 0 8px}
+.kv dt{color:var(--mute)}
+.kv dd{margin:0;font-variant-numeric:tabular-nums}
+.num{font-family:var(--mono);font-weight:700}
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;padding:1px 7px;border-radius:999px;background:var(--chip);border:1px solid var(--line)}
+.tag i{width:8px;height:8px;border-radius:50%;background:var(--c)}
+.note{color:#CBD3E3;margin:0}
+
+/* panel */
+#panel{position:absolute;z-index:6;right:max(12px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 12px);bottom:calc(env(safe-area-inset-bottom,0px) + 12px);width:390px;display:flex;flex-direction:column;background:var(--panel);backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.tabs{display:flex;border-bottom:1px solid var(--line);flex:none}
+.tabs button{flex:1;padding:12px 0 10px;border:0;background:none;cursor:pointer;color:var(--mute);font-size:14px;border-bottom:2px solid transparent}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--dawn)}
+.grab{display:none}
+.body{flex:1;overflow-y:auto;padding:16px 16px 24px;font-size:13.5px;line-height:1.7;scrollbar-width:thin}
+.body h2{font-family:var(--serif);font-size:19px;margin:0 0 6px;text-wrap:balance}
+.body h4{font-size:12px;letter-spacing:.12em;color:var(--mute);font-weight:500;margin:20px 0 8px;text-transform:uppercase}
+.body p{margin:0 0 10px;color:#D3DAE8}
+.lead{color:#D9DFEB}
+.tbl{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
+.tbl th{text-align:left;color:var(--mute);font-weight:500;padding:6px 4px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl td{padding:7px 4px;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl td.r,.tbl th.r{text-align:right}
+.tbl tr.rt{cursor:pointer}
+.tbl tr.rt:hover td{background:rgba(255,255,255,.03)}
+.rn{display:inline-flex;align-items:center;gap:6px;font-weight:700;white-space:nowrap}
+.rn i{width:9px;height:9px;border-radius:50%;background:var(--c)}
+.box{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:rgba(255,255,255,.025);margin:10px 0}
+.box ul{margin:4px 0 0;padding-left:18px}
+.box li{margin:2px 0}
+.warn{border-color:rgba(242,166,90,.35);background:var(--dawn-soft)}
+svg text{font-family:var(--sans)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:none;padding:5px 12px;cursor:pointer;color:var(--mute);font-size:12.5px}
+.seg button[aria-pressed="true"]{background:var(--chip);color:var(--ink)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0 4px}
+.stats div{border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+.stats small{display:block;color:var(--mute);font-size:11px}
+.stats b{font-family:var(--mono);font-size:15px}
+.seq{list-style:none;margin:6px 0 0;padding:0;position:relative}
+.seq:before{content:"";position:absolute;left:46px;top:6px;bottom:6px;width:2px;background:var(--c);opacity:.5}
+.seq li{display:grid;grid-template-columns:40px 14px 1fr;gap:0 6px;align-items:start;padding:3px 0}
+.seq .alt{font-family:var(--mono);font-size:11.5px;color:var(--mute);text-align:right;padding-top:2px}
+.seq .mk{width:12px;height:12px;border-radius:50%;margin-top:5px;background:var(--panel-solid);border:2px solid var(--c);position:relative;z-index:1}
+.seq .mk.h{width:9px;height:9px;transform:rotate(45deg);border-radius:1px;margin:7px 0 0 2px;background:#FFF6E6;border-width:1.5px}
+.seq button{border:0;background:none;text-align:left;padding:0;cursor:pointer;line-height:1.5}
+.seq button:hover .nm{text-decoration:underline}
+.seq .st{font-weight:700}
+.seq .nm{color:#D9DFEB}
+.seq .tm{color:var(--faint);font-size:11.5px;margin-left:4px;font-family:var(--mono)}
+.btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--chip);border-radius:8px;padding:7px 12px;cursor:pointer;font-size:13px}
+.btn:hover{border-color:rgba(255,255,255,.3)}
+.btn.pri{background:var(--dawn);color:#1C1208;border-color:var(--dawn);font-weight:700}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.months{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;margin:6px 0 10px}
+.months button{border:1px solid var(--line);background:none;border-radius:6px;padding:5px 0;cursor:pointer;font-family:var(--mono);font-size:12px;color:var(--mute)}
+.months button.season{color:var(--ink);border-color:rgba(242,166,90,.35)}
+.months button[aria-pressed="true"]{background:var(--dawn);color:#1C1208;border-color:var(--dawn)}
+.src{color:var(--faint);font-size:11.5px;line-height:1.6}
+.src a{color:var(--mute)}
+.layers{display:grid;gap:8px}
+.layers label{display:flex;align-items:center;gap:8px;cursor:pointer}
+.layers input[type=range]{flex:1;accent-color:var(--dawn)}
+.hint{position:absolute;left:max(16px,env(safe-area-inset-left,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 14px);font-size:12px;color:var(--mute);text-shadow:0 1px 4px #000;pointer-events:none;z-index:4}
+.loading{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--serif);font-size:18px;color:var(--mute);z-index:20;background:var(--sky-top);transition:opacity .6s}
+.loading.done{opacity:0;pointer-events:none}
+.compass{position:absolute;z-index:5;left:max(16px,env(safe-area-inset-left,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 40px);width:46px;height:46px;border-radius:50%;border:1px solid var(--line);background:rgba(10,14,26,.7);display:grid;place-items:center;cursor:pointer;padding:0}
+.compass svg{width:34px;height:34px}
+
+
+.livebadge{pointer-events:auto;display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:rgba(10,14,26,.72);backdrop-filter:blur(8px);border-radius:999px;padding:4px 12px 4px 8px;cursor:pointer;font-size:12.5px;color:var(--ink);align-self:flex-start}
+.livebadge .pulse{width:8px;height:8px;border-radius:50%;background:#58D68D;animation:pulse 2s infinite}
+.livebadge.stale .pulse{background:var(--faint);animation:none}
+.livebadge b{font-family:var(--mono)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(88,214,141,.55)}70%{box-shadow:0 0 0 8px rgba(88,214,141,0)}100%{box-shadow:0 0 0 0 rgba(88,214,141,0)}}
+.hero{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin:8px 0 4px}
+.hero .big{font-family:var(--mono);font-weight:700;font-size:44px;line-height:1;letter-spacing:-.02em}
+.hero .meta{color:var(--mute);font-size:12.5px;line-height:1.6}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:2px 9px;border-radius:999px;border:1px solid var(--line);background:var(--chip)}
+.pill.ok{border-color:rgba(88,214,141,.45);color:#9BE3B8}
+.pill.closed{border-color:rgba(242,166,90,.45);color:#F5C08E}
+.pill.alert{border-color:rgba(233,73,62,.6);color:#F7A49C}
+.chart{position:relative;margin:6px 0 2px}
+.chart .tip{position:absolute;top:0;pointer-events:none;background:#0A0E1A;border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:12px;line-height:1.55;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:2}
+.chart .tip i{display:inline-block;width:12px;height:2px;margin-right:6px;vertical-align:middle;background:var(--c)}
+.chart .tip b{font-family:var(--mono)}
+.news{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.news a{color:var(--ink);text-decoration:none;display:block;border-bottom:1px solid var(--line);padding-bottom:7px}
+.news a:hover span{text-decoration:underline}
+.news small{display:block;color:var(--mute);font-family:var(--mono);font-size:11px}
+.stale-note{color:#F5C08E;font-size:12px}
+.fj{display:grid;grid-template-columns:46px repeat(14,minmax(19px,1fr));gap:2px;font-size:11px;min-width:330px}
+.fj .h{color:var(--mute);text-align:center;font-size:10.5px;line-height:1.25;padding-bottom:2px}
+.fj .h.d{grid-column:span 2;color:var(--ink);font-size:11px}
+.fj .side{color:var(--mute);font-size:11px;line-height:1.2;align-self:center}
+.fj .c{height:26px;border-radius:4px;display:grid;place-items:center;font-family:var(--mono);font-weight:700;color:var(--ink);background:rgba(242,166,90,var(--a));font-variant-numeric:tabular-nums}
+.fj .c.lo{color:var(--mute);font-weight:500}
+.fj .c.now{outline:2px solid #E9EDF5;outline-offset:-1px}
+.fj .c.past{opacity:.45}
+.fjnow{display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 8px}
+.fjnow b{font-family:var(--mono);font-size:20px;color:var(--dawn)}
+@media (prefers-reduced-motion:reduce){.livebadge .pulse{animation:none}}
+@media (max-width:820px){
+  .chips{max-width:100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+  .chips::-webkit-scrollbar{display:none}
+  .brand span{display:none}
+  #panel{left:0;right:0;top:auto;bottom:0;width:auto;height:46%;border-radius:14px 14px 0 0;border-bottom:0;padding-bottom:env(safe-area-inset-bottom,0px);transition:height .25s}
+  #panel.min{height:96px}
+  #panel.max{height:82%}
+  .grab{display:block;flex:none;height:16px;border:0;background:none;cursor:pointer;position:relative;width:100%}
+  .grab:after{content:"";position:absolute;left:50%;top:6px;width:40px;height:4px;margin-left:-20px;border-radius:2px;background:rgba(255,255,255,.25)}
+  .body{padding:12px max(16px,env(safe-area-inset-left,0px)) 20px max(16px,env(safe-area-inset-right,0px))}
+  .hint{display:none}
+  .compass{bottom:calc(46% + 12px)}
+  #card{left:16px!important;right:16px;width:auto;top:auto!important;bottom:calc(46% + 10px)}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div id="app">
+  <canvas id="gl" aria-label="富士山三维地形图，可拖动旋转、缩放"></canvas>
+  <div id="pins"></div>
+  <div id="probe"><div class="ring"></div><div class="read"></div></div>
+
+  <div class="top">
+    <div class="brand"><h1>富士山<b>3776 m</b></h1><span>四条登山路线 · 合目 · 山小屋 · 海拔与气温</span></div>
+    <div class="chips" id="chips" role="group" aria-label="选择路线"></div>
+    <button class="livebadge" id="liveBadge" hidden></button>
+  </div>
+
+  <button class="compass" id="compass" title="回到全景" aria-label="回到全景"><svg viewBox="-20 -20 40 40"><g id="needle"><path d="M0 -15 L5 0 L-5 0Z" fill="#E9493E"/><path d="M0 15 L5 0 L-5 0Z" fill="#97A3BC"/><text x="0" y="-4" font-size="0" fill="none">N</text></g></svg></button>
+  <div class="hint">拖动旋转 · 右键或双指平移 · 滚轮或双指缩放 · 点标记看详情</div>
+
+  <section id="panel" aria-label="信息面板">
+    <button class="grab" id="grab" aria-label="展开或收起面板"></button>
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="all" aria-selected="true">整体</button>
+      <button role="tab" data-tab="live" aria-selected="false">实况</button>
+      <button role="tab" data-tab="route" aria-selected="false">路线</button>
+      <button role="tab" data-tab="temp" aria-selected="false">气温</button>
+      <button role="tab" data-tab="view" aria-selected="false">显示</button>
+    </div>
+    <div class="body" id="body"></div>
+  </section>
+
+  <div id="card" hidden></div>
+  <div class="loading" id="loading">正在加载地形…</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/lines/LineSegmentsGeometry.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/lines/LineGeometry.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/lines/LineMaterial.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/lines/LineSegments2.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/lines/Line2.js"></script>
+<script>
+(async function(){
+/* ---------------- reference data ---------------- */
+// Official figures: 富士登山オフィシャルサイト「登山ルートの比較」2026 (distance, time, trailhead altitude)
+const ROUTES={
+ Y:{name:'吉田路线',jp:'吉田ルート',col:'#F2C230',up:'yoshida_up',down:'yoshida_down',start:'富士スバルライン五合目',startAlt:2305,gain:'约 1450',
+    upKm:6.8,upT:'6:10',downKm:7.0,downT:'3:35',pref:'山梨县',open:'7/1',
+    feat:'人最多、山小屋最多（七合目到本八合目一路都有）。上山、下山分开走：下山是推土机开出的之字形砂砾路。本八合目以上和须走路线共用，旺季会堵。',
+    access:'新宿、河口湖站、富士山站有巴士直达富士斯巴鲁线五合目。马路（斯巴鲁线）在登山季对私家车封闭，要在山脚换乘巴士。',
+    rule:'2026 年起每天限 4000 人，需在网上预约通行。'},
+ S:{name:'须走路线',jp:'須走ルート',col:'#E9493E',up:'subashiri_up',down:'subashiri_down',start:'須走口五合目',startAlt:2000,gain:'约 1700',
+    upKm:6.9,upT:'6:25',downKm:6.2,downT:'3:20',pref:'静冈县',open:'7/1',
+    feat:'本六合目以下是树林带，阴凉、能看到植物。本八合目汇入吉田路线。下山走“砂走り”：七合目以下一大片细砂坡，可以大步往下滑。',
+    access:'御殿场站、新松田站有登山巴士到须走口五合目。ふじあざみライン 7/1–9/10 私家车管制。',
+    rule:''},
+ G:{name:'御殿场路线',jp:'御殿場ルート',col:'#3DB36B',up:'gotemba_up',down:'gotemba_down',start:'御殿場口新五合目',startAlt:1440,gain:'约 2300',
+    upKm:10.5,upT:'8:40',downKm:8.4,downT:'3:30',pref:'静冈县',open:'7/10',
+    feat:'起点最低、路最长、山小屋最少，适合体力好的人。大石茶屋之后要到新六合目才有小屋，全程几乎没有树荫。下山的“大砂走り”约 5 公里，是这条线的招牌。',
+    access:'御殿场站有巴士到新五合目。没有私家车管制，新五合目有停车场。',
+    rule:''},
+ F:{name:'富士宫路线',jp:'富士宮ルート',col:'#3E86F0',up:'fujinomiya',down:'fujinomiya',start:'富士宮口五合目',startAlt:2400,gain:'约 1320',
+    upKm:4.3,upT:'5:10',downKm:4.3,downT:'2:40',pref:'静冈县',open:'7/10',
+    feat:'起点最高、距离最短，但一路都是陡坡和岩石。上山下山同一条路（上山优先让行）。山顶离最高点剑峰最近。从六合目可以横走到宝永火口。',
+    access:'新富士站、三岛站、富士宫站有巴士到富士宫口五合目。富士山スカイライン 7/10–9/10 私家车管制，要停在水ヶ塚公园换乘。',
+    rule:''},
+};
+const EXTRA={
+ O:{name:'火口一周',col:'#D9DEE8',path:'ohachi',note:'お鉢巡り，约 3 km / 1.5 小时'},
+ P:{name:'宝永火口横道',col:'#B48CF2',path:'prince',note:'富士宫六合目 → 宝永火口 → 御殿场七合目附近'},
+};
+// 気象庁 富士山（標高3775m）平年値：月平均・日最高・日最低（1991–2020）, 平均風速 m/s（1991–2004）
+const JMA={1:[-18.2,-15.3,-21.4,15.9],2:[-17.4,-14.3,-21.1,15.6],3:[-14.1,-10.9,-17.7,14.0],4:[-8.8,-5.9,-12.2,12.9],5:[-3.2,-0.6,-6.3,10.9],6:[1.4,4.0,-1.4,10.2],7:[5.3,8.0,2.8,9.2],8:[6.4,9.5,3.8,7.6],9:[3.5,6.5,0.6,9.4],10:[-2.0,0.7,-5.1,10.9],11:[-8.7,-5.9,-11.8,13.2],12:[-15.1,-12.2,-18.3,15.3]};
+const LAPSE=0.6; // ℃ / 100 m
+const T=(h,m,k=0)=>JMA[m][k]+LAPSE*(3775-h)/100;
+const fmtT=v=>(v>0?'':'')+v.toFixed(0).replace('-0','0')+'℃';
+
+/* ---------------- state ---------------- */
+const st={route:null,tab:'all',month:8,dir:'up',exag:1.0,tex:'relief',showHuts:true,showLabels:true,sel:null,play:null};
+
+/* ---------------- load data ---------------- */
+const D=await fetch('data.json').then(r=>r.json());
+const M=D.meta; const KX=M.kmx, KY=M.kmy, HW=M.hw, HH=M.hh;
+const himg=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src='terrain.png'});
+const hc=document.createElement('canvas');hc.width=HW;hc.height=HH;const hx=hc.getContext('2d',{willReadFrequently:true});hx.drawImage(himg,0,0);
+const px=hx.getImageData(0,0,HW,HH).data; const HGT=new Float32Array(HW*HH);
+for(let i=0;i<HW*HH;i++)HGT[i]=(px[i*4]*256+px[i*4+1])/10;
+function hAt(x,y){ // x east from W edge, y south from N edge (m)
+  let u=x/KX*HW-.5,v=y/KY*HH-.5; u=Math.max(0,Math.min(HW-1.001,u)); v=Math.max(0,Math.min(HH-1.001,v));
+  const i=Math.floor(u),j=Math.floor(v),fu=u-i,fv=v-j,a=j*HW+i;
+  return HGT[a]*(1-fu)*(1-fv)+HGT[a+1]*fu*(1-fv)+HGT[a+HW]*(1-fu)*fv+HGT[a+HW+1]*fu*fv;
+}
+const summit=D.places.find(p=>p.n.startsWith('剣ヶ峰'));
+
+/* ---------------- three.js scene ---------------- */
+const canvas=document.getElementById('gl');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.outputEncoding=THREE.sRGBEncoding;
+const scene=new THREE.Scene();
+scene.fog=new THREE.Fog(0x141b30,26000,60000);
+const camera=new THREE.PerspectiveCamera(42,1,20,150000);
+const world=new THREE.Group();scene.add(world);
+const W2=(x,y,h)=>new THREE.Vector3(x-KX/2,h,y-KY/2);
+scene.add(new THREE.HemisphereLight(0xdfe8ff,0x3a2c22,.75));
+const sun=new THREE.DirectionalLight(0xfff1dc,.55);sun.position.set(-1,1.1,-0.6);scene.add(sun);
+
+const SX=511,SY=Math.round(511*HH/HW);
+const geo=new THREE.PlaneGeometry(KX,KY,SX,SY);geo.rotateX(-Math.PI/2);
+const pos=geo.attributes.position;
+for(let i=0;i<pos.count;i++){pos.setY(i,hAt(pos.getX(i)+KX/2,pos.getZ(i)+KY/2));}
+geo.computeVertexNormals();
+const tl=new THREE.TextureLoader();
+function loadTex(src){return new Promise(r=>tl.load(src,t=>{t.encoding=THREE.sRGBEncoding;t.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());r(t)}))}
+const texRelief=await loadTex('relief.jpg'); let texPhoto=null;
+const terrMat=new THREE.MeshLambertMaterial({map:texRelief,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:2});
+const terrain=new THREE.Mesh(geo,terrMat);world.add(terrain);
+// skirt — makes it read as a cut-out model block
+(function(){const base=0,v=[],idx=[];let n=0;
+  function edge(pts){for(let k=0;k<pts.length;k++){const [x,y]=pts[k],h=hAt(x,y);const p=W2(x,y,h),q=W2(x,y,base);v.push(p.x,p.y,p.z,q.x,q.y,q.z);if(k>0){const a=n+(k-1)*2;idx.push(a,a+1,a+2,a+1,a+3,a+2)}}n+=pts.length*2}
+  const N=200,e=[[],[],[],[]];
+  for(let k=0;k<=N;k++){const t=k/N;e[0].push([t*KX,0]);e[1].push([KX,t*KY]);e[2].push([KX-t*KX,KY]);e[3].push([0,KY-t*KY])}
+  e.forEach(edge);
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));g.setIndex(idx);g.computeVertexNormals();
+  world.add(new THREE.Mesh(g,new THREE.MeshLambertMaterial({color:0x3b2f2a,side:THREE.DoubleSide})));
+  const bg=new THREE.PlaneGeometry(KX,KY);bg.rotateX(Math.PI/2);const b=new THREE.Mesh(bg,new THREE.MeshBasicMaterial({color:0x211a18}));b.position.y=base;world.add(b);
+})();
+
+/* ---------------- routes ---------------- */
+function profile(key){ // pts with h, cumulative distance
+  const P=D.paths[key];const out=[];let d=0;
+  for(let i=0;i<P.length;i++){const [x,y]=P[i],h=hAt(x,y);if(i){const [a,b]=P[i-1],ph=out[i-1].h;d+=Math.hypot(x-a,y-b,h-ph)}out.push({x,y,h,d})}
+  return out;
+}
+const PROF={};Object.keys(D.paths).forEach(k=>PROF[k]=profile(k));
+const resV=new THREE.Vector2(1,1);
+const lines=[];
+function mkLine(key,col,dashed,group){
+  const P=PROF[key];const arr=[];P.forEach(p=>{const v=W2(p.x,p.y,p.h+9);arr.push(v.x,v.y,v.z)});
+  const g=new THREE.LineGeometry();g.setPositions(arr);
+  const mk=(depth,op,w)=>{const m=new THREE.LineMaterial({color:new THREE.Color(col),linewidth:w,transparent:true,opacity:op,depthTest:depth,dashed,dashSize:45,gapSize:35,resolution:resV});
+    const l=new THREE.Line2(g,m);l.computeLineDistances();l.renderOrder=depth?2:1;world.add(l);return l};
+  const main=mk(true,1,3.2),ghost=mk(false,.22,2);
+  const o={key,group,main,ghost,dashed};lines.push(o);return o;
+}
+for(const [k,r] of Object.entries(ROUTES)){mkLine(r.up,r.col,false,k);if(r.down!==r.up)mkLine(r.down,r.col,true,k)}
+for(const [k,r] of Object.entries(EXTRA))mkLine(r.path,r.col,true,k);
+
+/* place → nearest point on route profile (for chart + sequence) */
+function nearestOn(key,p){const P=PROF[key];let bi=0,bd=1e18;P.forEach((q,i)=>{const d=(q.x-p.x)**2+(q.y-p.y)**2;if(d<bd){bd=d;bi=i}});return {i:bi,d:Math.sqrt(bd),at:P[bi].d}}
+function effortFrac(key,i){const P=PROF[key];let e=0,tot=0,up=0;const ef=[0];for(let k=1;k<P.length;k++){const dz=P[k].h-P[k-1].h,dd=P[k].d-P[k-1].d;const c=dd/1000+(dz>0?dz/100:Math.abs(dz)/300);tot+=c;ef.push(tot)}return ef[i]/tot}
+const hm=s=>{const [h,m]=s.split(':').map(Number);return h*60+m};
+const fmtHM=min=>{min=Math.round(min/5)*5;const h=Math.floor(min/60),m=min%60;return h?`${h}小时${m?m+'分':''}`:`${m}分`};
+
+/* ---------------- pins ---------------- */
+const pinsEl=document.getElementById('pins');
+const pins=D.places.map((p,i)=>{
+  const el=document.createElement('button');el.className='pin '+(p.k==='hut'?'hut':p.k==='mark'?'mark':'station');
+  const rc=p.r?ROUTES[p.r[0]].col:'#F2A65A';el.style.setProperty('--c',rc);
+  const label=p.k==='hut'?p.n:(p.k==='station'?p.n:p.n);
+  el.innerHTML=`<span class="dot"></span><span class="lab">${label}<em>${p.k==='mark'&&p.n.includes('m')?'':p.e+' m'}</em></span>`;
+  el.setAttribute('aria-label',`${p.n}，${p.s}，海拔约 ${p.e} 米`);
+  el.addEventListener('click',e=>{e.stopPropagation();openCard(i)});
+  el.addEventListener('pointerenter',()=>{hoverPin=i});el.addEventListener('pointerleave',()=>{if(hoverPin===i)hoverPin=-1});
+  pinsEl.appendChild(el);
+  const prio=p.k==='mark'?3:p.k==='station'?2:1;
+  return {p,el,prio,w:0,vis:false,occ:false,show:false};
+});
+let hoverPin=-1;
+
+/* ---------------- camera & controls ---------------- */
+const controls=new THREE.OrbitControls(camera,canvas);
+controls.enableDamping=true;controls.dampingFactor=.08;controls.minDistance=250;controls.maxDistance=48000;controls.maxPolarAngle=Math.PI*0.47;
+controls.screenSpacePanning=false;controls.rotateSpeed=.6;
+const sumW=W2(summit.x,summit.y,summit.de);
+function home(){return {pos:new THREE.Vector3(sumW.x+11800,sumW.y+7600,sumW.z+13600),tgt:new THREE.Vector3(sumW.x,1900,sumW.z+600)}}
+const H0=home();camera.position.copy(H0.pos);controls.target.copy(H0.tgt);
+let fly=null;
+function flyTo(tgt,dist,az,el,dur=1300){ // az: radians from +z (south) clockwise toward east
+  const toPos=new THREE.Vector3(tgt.x+dist*Math.cos(el)*Math.sin(az),tgt.y+dist*Math.sin(el),tgt.z+dist*Math.cos(el)*Math.cos(az));
+  fly={t0:performance.now(),dur,fp:camera.position.clone(),ft:controls.target.clone(),tp:toPos,tt:tgt.clone()};
+}
+function flyHome(){const h=home();fly={t0:performance.now(),dur:1300,fp:camera.position.clone(),ft:controls.target.clone(),tp:h.pos,tt:h.tgt}}
+const ease=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+function routeView(k){
+  const P=PROF[ROUTES[k].up];const s=P[0];
+  const mid=W2((s.x+summit.x)/2,(s.y+summit.y)/2,(s.h+3600)/2*st.exag);
+  const az=Math.atan2(s.x-summit.x,s.y-summit.y); // direction from summit toward trailhead
+  const len=Math.hypot(s.x-summit.x,s.y-summit.y);
+  flyTo(mid,Math.max(6500,len*1.55),az+0.35,0.42);
+}
+
+/* ---------------- UI: chips ---------------- */
+const chips=document.getElementById('chips');
+function renderChips(){
+  chips.innerHTML='';
+  const all=document.createElement('button');all.className='chip';all.style.setProperty('--c','#F2A65A');all.innerHTML='<i></i>全部';all.setAttribute('aria-pressed',st.route===null);
+  all.onclick=()=>{selectRoute(null)};chips.appendChild(all);
+  for(const [k,r] of Object.entries(ROUTES)){const b=document.createElement('button');b.className='chip';b.style.setProperty('--c',r.col);
+    b.innerHTML=`<i></i>${r.name}<small>${r.startAlt}</small>`;b.setAttribute('aria-pressed',st.route===k);b.onclick=()=>selectRoute(st.route===k?null:k);chips.appendChild(b)}
+}
+function selectRoute(k,fly_=true){
+  st.route=k;stopPlay();renderChips();
+  if(k){st.tab='route';if(fly_)routeView(k)}else{if(fly_)flyHome();if(st.tab==='route')st.tab='all'}
+  styleLines();renderPanel();closeCard();
+}
+function styleLines(){
+  lines.forEach(l=>{
+    const on=st.route===null||l.group===st.route||(l.group==='O')||(l.group==='P'&&(st.route==='F'||st.route==='G'));
+    const focus=st.route!==null&&l.group===st.route;
+    l.main.material.opacity=on?1:.18;l.main.material.linewidth=focus?4.6:(on?3:2);
+    l.ghost.material.opacity=on?(focus?.35:.2):.05;
+  });
+}
+
+/* ---------------- panel ---------------- */
+const body=document.getElementById('body');const panel=document.getElementById('panel');
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{st.tab=b.dataset.tab;renderPanel();if(panel.classList.contains('min'))panel.classList.remove('min')});
+let gy0=null;const grab=document.getElementById('grab');
+grab.addEventListener('pointerdown',e=>{gy0=e.clientY});
+window.addEventListener('pointerup',e=>{if(gy0==null)return;const dy=e.clientY-gy0;gy0=null;
+  if(Math.abs(dy)<8){panel.classList.toggle('min');panel.classList.remove('max');return}
+  if(dy<0){if(panel.classList.contains('min'))panel.classList.remove('min');else panel.classList.add('max')}else{if(panel.classList.contains('max'))panel.classList.remove('max');else panel.classList.add('min')}});
+
+function hutsOf(k){return D.places.filter(p=>p.k==='hut'&&p.r.includes(k))}
+function renderPanel(){
+  document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===st.tab));
+  body.scrollTop=0;
+  if(st.tab==='all')body.innerHTML=panelAll();
+  else if(st.tab==='live')body.innerHTML=panelLive();
+  else if(st.tab==='route')body.innerHTML=panelRoute();
+  else if(st.tab==='temp')body.innerHTML=panelTemp();
+  else body.innerHTML=panelView();
+  bindPanel();
+}
+function panelAll(){
+  const rows=Object.entries(ROUTES).map(([k,r])=>`<tr class="rt" data-r="${k}"><td><span class="rn" style="--c:${r.col}"><i></i>${r.name}</span></td><td class="r num">${r.startAlt}</td><td class="r">${r.upKm} km<br><span style="color:var(--mute)">${r.upT.replace(':','h')}</span></td><td class="r">${r.downKm} km<br><span style="color:var(--mute)">${r.downT.replace(':','h')}</span></td><td class="r num">${hutsOf(k).length}</td></tr>`).join('');
+  return `<h2>一座山，四条路，十个“合目”</h2>
+  <p class="lead">富士山海拔 3776 米，是日本最高峰。登山道从东南西北四面上山，起点都在半山腰的“五合目”，坐巴士就能到。从五合目往上要爬 1300 到 2300 米。</p>
+  <p>“合目”是传统的分段：山脚是一合目，山顶是十合目。各段长短并不相等，中间还有“新六合目”“本八合目”“八合五勺”这样的小段。路牌和山小屋都按合目标注，所以图上也按合目来标。</p>
+  ${ladderSVG()}
+  <table class="tbl"><thead><tr><th>路线</th><th class="r">起点 m</th><th class="r">上山</th><th class="r">下山</th><th class="r">小屋</th></tr></thead><tbody>${rows}</tbody></table>
+  <p class="src" style="margin-top:6px">距离和时间是官方标准值，不含休息。点一行可以飞到那条路线。</p>
+  <div class="box"><b>典型走法：两天一夜</b><ul>
+   <li>第一天中午到五合目，先待 1 小时适应高度。</li>
+   <li>下午爬到七、八合目的山小屋（约 3000–3400 m），吃饭、睡几个小时。</li>
+   <li>半夜 1–2 点出发，天亮前到山顶看日出（日语叫“御来光”）。</li>
+   <li>有余力就绕火口一圈（お鉢巡り），经过最高点剑峰，再下山。</li></ul></div>
+  <div class="box warn"><b>2026 年登山季的规则</b><ul>
+   <li>开山：吉田、须走 7 月 1 日；富士宫、御殿场 7 月 10 日；都在 9 月 10 日关闭。</li>
+   <li>四条路线都收入山费，每人 4000 日元，需事前登记。</li>
+   <li>14 点到次日 3 点不能进山（订了山小屋的人除外）。</li>
+   <li>吉田路线每天限 4000 人，要预约。静冈县三条路线要先在网上完成“事前学习”。</li>
+   <li>关山后山小屋、厕所全部关闭，没有救援体系，不要登山。</li></ul>
+   <p class="src" style="margin:6px 0 0">2026 季已经结束，2027 年的规则以届时官方公布为准。</p></div>
+  ${srcHTML()}`;
+}
+function ladderSVG(){
+  const w=358,h=260,top=16,bot=236,lo=1300,hi=3800;const Y=a=>bot-(a-lo)/(hi-lo)*(bot-top);
+  const ks=Object.keys(ROUTES);const cx=k=>78+ks.indexOf(k)*62;
+  let g='';
+  for(let a=1500;a<=3700;a+=500){g+=`<line x1="44" x2="${w-58}" y1="${Y(a)}" y2="${Y(a)}" stroke="rgba(160,180,220,.12)"/><text x="40" y="${Y(a)+4}" text-anchor="end" font-size="10" fill="#97A3BC" font-family="JetBrains Mono">${a}</text>`}
+  g+=`<line x1="44" x2="${w-58}" y1="${Y(3776)}" y2="${Y(3776)}" stroke="#F2A65A" stroke-dasharray="3 3"/><text x="${w-56}" y="${Y(3776)+4}" font-size="10" fill="#F2A65A">剑峰 3776</text>`;
+  // treeline band
+  g+=`<rect x="44" width="${w-102}" y="${Y(2500)}" height="${Y(2300)-Y(2500)}" fill="rgba(61,179,107,.08)"/><text x="${w-56}" y="${Y(2400)+4}" font-size="10" fill="#6FA884">森林线</text>`;
+  g+=`<text x="${w-56}" y="${Y(3200)+4}" font-size="10" fill="#97A3BC">小屋集中</text><rect x="44" width="${w-102}" y="${Y(3450)}" height="${Y(2700)-Y(3450)}" fill="rgba(255,246,230,.035)"/>`;
+  for(const k of ks){const r=ROUTES[k],x=cx(k);
+    g+=`<line x1="${x}" x2="${x}" y1="${Y(r.startAlt)}" y2="${Y(3712)}" stroke="${r.col}" stroke-width="5" stroke-linecap="round"/>`;
+    hutsOf(k).forEach(p=>{g+=`<rect x="${x+6}" y="${Y(p.e)-2.5}" width="5" height="5" transform="rotate(45 ${x+8.5} ${Y(p.e)})" fill="#FFF6E6" opacity=".85"/>`});
+    g+=`<circle cx="${x}" cy="${Y(r.startAlt)}" r="5" fill="#0F1526" stroke="${r.col}" stroke-width="2"/><text x="${x}" y="${Y(r.startAlt)+17}" text-anchor="middle" font-size="10.5" fill="#E9EDF5" font-family="JetBrains Mono">${r.startAlt}</text>`;
+    g+=`<text x="${x}" y="${bot+20}" text-anchor="middle" font-size="11.5" fill="${r.col}" font-weight="700">${r.name.replace('路线','')}</text>`;
+  }
+  return `<div style="overflow-x:auto;margin:10px 0 6px"><svg viewBox="0 0 ${w} ${h}" width="100%" style="max-width:${w}px;display:block" role="img" aria-label="四条路线起点海拔对比">${g}</svg></div><p class="src" style="margin:-2px 0 10px">竖线是从五合目到山顶的海拔范围，菱形是山小屋。</p>`;
+}
+function panelRoute(){
+  const k=st.route;
+  if(!k)return `<h2>先选一条路线</h2><p>在顶部点路线名称，或者点下面任意一条。</p><div class="row">${Object.entries(ROUTES).map(([k,r])=>`<button class="btn" data-r="${k}"><span class="rn" style="--c:${r.col}"><i></i>${r.name}</span></button>`).join('')}</div>`;
+  const r=ROUTES[k];const key=st.dir==='up'?r.up:r.down;const P=PROF[key];
+  const seq=seqOf(k,key);
+  return `<h2 style="display:flex;align-items:center;gap:8px"><span class="rn" style="--c:${r.col}"><i style="width:12px;height:12px"></i></span>${r.name}<span style="font-family:var(--sans);font-size:12px;color:var(--mute);font-weight:400">${r.jp} · ${r.pref}</span></h2>
+  <div class="stats"><div><small>起点海拔</small><b>${r.startAlt}</b> m<small>爬升 ${r.gain} m</small></div><div><small>上山</small><b>${r.upKm}</b> km<small>约 ${r.upT.replace(':','小时')}分</small></div><div><small>下山</small><b>${r.downKm}</b> km<small>约 ${r.downT.replace(':','小时')}分</small></div></div>
+  <p style="margin-top:8px">${r.feat}</p>
+  <div class="row" style="justify-content:space-between;margin:12px 0 4px">
+   <div class="seg" role="group">${r.up!==r.down?`<button data-dir="up" aria-pressed="${st.dir==='up'}">上山道</button><button data-dir="down" aria-pressed="${st.dir==='down'}">下山道</button>`:`<button aria-pressed="true">上下同一条路</button>`}</div>
+   <button class="btn pri" id="play">${st.play?'■ 停止':'▶ 沿路走一遍'}</button></div>
+  ${profSVG(k,key)}
+  <h4>沿途（${st.dir==='up'?'从下往上':'从上往下'}）· 时间按官方总时长折算</h4>
+  <ul class="seq" style="--c:${r.col}">${seq}</ul>
+  <h4>怎么去起点</h4><p>${r.access}</p>${r.rule?`<p>${r.rule}</p>`:''}
+  <p class="src">开山日（2026）：${r.open}，关闭：9/10。</p>`;
+}
+function seqOf(k,key){
+  const r=ROUTES[k];const total=hm(st.dir==='up'?r.upT:r.downT);
+  const items=D.places.filter(p=>(p.r.includes(k))&&(p.k!=='mark'||p.r===k)).map(p=>{const n=nearestOn(key,p);return {p,n}}).filter(o=>o.n.d<260);
+  items.sort((a,b)=>a.n.at-b.n.at);
+  return items.map(({p,n})=>{const idx=D.places.indexOf(p);const f=effortFrac(key,n.i);
+    return `<li><span class="alt">${p.e}</span><span class="mk ${p.k==='hut'?'h':''}"></span><button data-p="${idx}">${p.k==='station'?`<span class="st">${p.s}</span> <span class="nm">${p.n===p.s?'':p.n}</span>`:p.k==='hut'?`<span class="nm">${p.n}</span>`:`<span class="nm" style="color:var(--dawn)">${p.n}</span>`}<span class="tm">${n.at>30?'+'+fmtHM(f*total):'起点'}</span></button></li>`}).join('');
+}
+function profSVG(k,key){
+  const P=PROF[key];const r=ROUTES[k];const w=358,h=170,l=36,rgt=8,t=10,b=24;
+  const dmax=P[P.length-1].d;const hmin=Math.floor((Math.min(...P.map(p=>p.h))-100)/500)*500,hmax=3800;
+  const X=d=>l+d/dmax*(w-l-rgt),Y=a=>h-b-(a-hmin)/(hmax-hmin)*(h-t-b);
+  let path='',area='';P.forEach((p,i)=>{path+=(i?'L':'M')+X(p.d).toFixed(1)+' '+Y(p.h).toFixed(1)});
+  area=path+`L${X(dmax)} ${h-b}L${X(0)} ${h-b}Z`;
+  let g='';for(let a=hmin;a<=hmax;a+=500){g+=`<line x1="${l}" x2="${w-rgt}" y1="${Y(a)}" y2="${Y(a)}" stroke="rgba(160,180,220,.12)"/><text x="${l-4}" y="${Y(a)+3.5}" text-anchor="end" font-size="9.5" fill="#97A3BC" font-family="JetBrains Mono">${a}</text>`}
+  for(let d=0;d<=dmax;d+=2000){g+=`<text x="${X(d)}" y="${h-8}" text-anchor="middle" font-size="9.5" fill="#97A3BC" font-family="JetBrains Mono">${d/1000}km</text>`}
+  let mk='';D.places.filter(p=>p.r.includes(k)&&p.k!=='mark').forEach(p=>{const n=nearestOn(key,p);if(n.d>200)return;const x=X(n.at),y=Y(P[n.i].h);
+    mk+=p.k==='hut'?`<rect x="${x-2.5}" y="${y-9}" width="5" height="5" transform="rotate(45 ${x} ${y-6.5})" fill="#FFF6E6"/>`:`<line x1="${x}" x2="${x}" y1="${y}" y2="${h-b}" stroke="${r.col}" stroke-opacity=".35"/>`});
+  return `<div style="position:relative"><svg id="prof" viewBox="0 0 ${w} ${h}" width="100%" style="display:block;touch-action:none;cursor:crosshair" role="img" aria-label="${r.name}海拔剖面">
+  <defs><linearGradient id="pg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${r.col}" stop-opacity=".45"/><stop offset="1" stop-color="${r.col}" stop-opacity=".03"/></linearGradient></defs>
+  ${g}<path d="${area}" fill="url(#pg)"/><path d="${path}" fill="none" stroke="${r.col}" stroke-width="2"/>${mk}
+  <line id="pcur" x1="0" x2="0" y1="${t}" y2="${h-b}" stroke="#fff" stroke-width="1" opacity="0"/><circle id="pdot" r="4" fill="#fff" opacity="0"/>
+  </svg><div class="src" style="margin-top:2px">横轴是沿路距离（按地形实测），纵轴是海拔。手指或鼠标在图上滑动，山上会同步显示位置。</div></div>`;
+}
+function panelTemp(){
+  const m=st.month;const [mean,mx,mn,wind]=JMA[m];
+  const season=m>=7&&m<=9;
+  const bands=[['山顶 · 剑峰',3776],['本八合目',3400],['七合目（吉田）',2700],['富士宫五合目',2400],['斯巴鲁线五合目',2305],['须走五合目',2000],['御殿场新五合目',1440]];
+  const rows=bands.map(([n,a])=>`<tr><td>${n}</td><td class="r num">${a}</td><td class="r num">${fmtT(T(a,m,1))}</td><td class="r num">${fmtT(T(a,m,0))}</td><td class="r num" style="color:#9FC3FF">${fmtT(T(a,m,2))}</td></tr>`).join('');
+  return `<h2>山上有多冷</h2>
+  <p>选月份。地图上所有点的气温都会按这个月份估算。</p>
+  <div class="months" role="group">${Array.from({length:12},(_,i)=>i+1).map(i=>`<button data-m="${i}" class="${i>=7&&i<=9?'season':''}" aria-pressed="${i===m}">${i}</button>`).join('')}</div>
+  ${season?'':`<div class="box warn" style="margin-top:0">${m}月不是登山季（每年 7 月上旬到 9 月 10 日）。这时的富士山是冬季雪山，山小屋全部关闭。</div>`}
+  <table class="tbl"><thead><tr><th>位置</th><th class="r">海拔</th><th class="r">白天最高</th><th class="r">平均</th><th class="r">清晨最低</th></tr></thead><tbody>${rows}</tbody></table>
+  <div class="box"><b>${m} 月山顶</b>：平均 <span class="num">${mean}℃</span>，最低 <span class="num">${mn}℃</span>，平均风速 <span class="num">${wind} m/s</span>。
+  <p style="margin:6px 0 0">风速每增加 1 m/s，体感温度大约再低 1℃。按平均风速算，${m} 月清晨在山顶的体感接近 <span class="num">${fmtT(mn-wind)}</span>。</p></div>
+  <div class="box"><b>换算方法</b><p style="margin:4px 0 0">山顶的数字来自日本气象厅富士山观测站（3775 m）1991–2020 年平年值。其他海拔按每升高 100 米降 0.6℃ 推算，是平均情况；遇到下雨、起风或晴朗无风的夜晚，实际会差好几度。</p></div>
+  <div class="box"><b>穿什么</b><ul><li>五合目：长袖、薄外套就够。</li><li>七、八合目往上：抓绒或薄羽绒 + 防风防水的冲锋衣裤，帽子、手套。</li><li>山顶等日出：按冬天准备，羽绒服很常见。</li><li>下山砂砾路：护腿（防砂进鞋）、口罩、太阳镜。</li></ul></div>
+  ${srcHTML()}`;
+}
+function panelView(){
+  return `<h2>显示设置</h2><div class="layers">
+  <label><input type="radio" name="tex" value="relief" id="tex-relief" ${st.tex==='relief'?'checked':''}> 地形渲染（按海拔着色，清楚）</label>
+  <label><input type="radio" name="tex" value="photo" id="tex-photo" ${st.tex==='photo'?'checked':''}> 航拍照片（国土地理院，拼接处颜色不一）</label>
+  <label style="margin-top:6px"><input type="checkbox" id="opt-huts" ${st.showHuts?'checked':''}> 显示山小屋</label>
+  <label><input type="checkbox" id="opt-labels" ${st.showLabels?'checked':''}> 显示名称</label>
+  <label style="margin-top:8px">高度夸张 <span class="num" id="exv">×${st.exag.toFixed(1)}</span><input type="range" id="exag" min="1" max="2.5" step="0.1" value="${st.exag}"></label>
+  <p class="src" style="margin:0">×1.0 是真实比例。富士山底宽约 40 公里、高不到 4 公里，真实比例下坡度看起来很缓；调大一点更容易看清起伏。</p>
+  </div>
+  <h4>视角</h4><div class="row">
+   <button class="btn" data-view="home">全景</button><button class="btn" data-view="top">正上方俯视</button><button class="btn" data-view="summit">山顶火口</button><button class="btn" data-view="hoei">宝永火口</button></div>
+  <h4>图例</h4>
+  <div class="layers" style="font-size:13px">
+   <div class="row"><svg width="34" height="10"><line x1="0" x2="34" y1="5" y2="5" stroke="#F2C230" stroke-width="3"/></svg>上山道</div>
+   <div class="row"><svg width="34" height="10"><line x1="0" x2="34" y1="5" y2="5" stroke="#F2C230" stroke-width="3" stroke-dasharray="6 4"/></svg>下山道（虚线）</div>
+   <div class="row"><svg width="34" height="10"><circle cx="17" cy="5" r="4.5" fill="#F2C230" stroke="#0B0F1C" stroke-width="2"/></svg>合目 / 登山口</div>
+   <div class="row"><svg width="34" height="12"><rect x="13" y="2" width="8" height="8" transform="rotate(45 17 6)" fill="#FFF6E6" stroke="#F2C230"/></svg>山小屋（2026 官方名单）</div>
+   <div class="row"><svg width="34" height="10"><circle cx="17" cy="5" r="4.5" fill="#F2A65A"/></svg>地标</div>
+   <p class="src" style="margin:0">路线颜色和山上路牌的颜色一致：吉田黄、须走红、御殿场绿、富士宫蓝。</p>
+  </div>
+  ${srcHTML()}`;
+}
+function srcHTML(){return `<h4>资料来源</h4><p class="src">地形：国土地理院 数值标高模型（地理院タイル DEM，约 10 m 网格）；航拍：国土地理院 シームレス空中写真。<br>登山道、小屋和合目位置：© OpenStreetMap contributors（ODbL）。<br>山小屋名单、路线距离与时间、开山日期：<a href="https://www.fujisan-climb.jp/comparison-of-routes" target="_blank" rel="noopener">富士登山オフィシャルサイト</a>（2026）。<br>气温：<a href="https://www.data.jma.go.jp/stats/etrn/view/nml_sfc_ym.php?prec_no=50&block_no=47639" target="_blank" rel="noopener">気象庁 富士山 平年値</a>。<br>小屋标高：有招牌标高的用招牌值，没有的用地形数据实测值；两者有时差几十米。</p>`}
+function bindPanel(){
+  body.querySelectorAll('[data-r]').forEach(e=>e.onclick=()=>selectRoute(e.dataset.r));
+  body.querySelectorAll('[data-dir]').forEach(e=>e.onclick=()=>{st.dir=e.dataset.dir;stopPlay();renderPanel()});
+  body.querySelectorAll('[data-m]').forEach(e=>e.onclick=()=>{st.month=+e.dataset.m;renderPanel();if(st.sel!=null)openCard(st.sel,false)});
+  body.querySelectorAll('[data-p]').forEach(e=>e.onclick=()=>{const i=+e.dataset.p;const p=D.places[i];flyTo(W2(p.x,p.y,p.de*st.exag),2600,camAz(),0.5);openCard(i)});
+  body.querySelectorAll('[data-view]').forEach(e=>e.onclick=()=>view(e.dataset.view));
+  bindLive();
+  const pl=body.querySelector('#play');if(pl)pl.onclick=()=>{st.play?stopPlay():startPlay();};
+  const ex=body.querySelector('#exag');if(ex)ex.oninput=()=>{setExag(+ex.value);body.querySelector('#exv').textContent='×'+st.exag.toFixed(1)};
+  body.querySelectorAll('input[name=tex]').forEach(e=>e.onchange=()=>setTex(e.value));
+  const oh=body.querySelector('#opt-huts');if(oh)oh.onchange=()=>{st.showHuts=oh.checked};
+  const ol=body.querySelector('#opt-labels');if(ol)ol.onchange=()=>{st.showLabels=ol.checked};
+  const svg=body.querySelector('#prof');if(svg){
+    const move=e=>{const r=svg.getBoundingClientRect();const vb=svg.viewBox.baseVal;const x=(e.clientX-r.left)/r.width*vb.width;
+      const k=st.route,key=st.dir==='up'?ROUTES[k].up:ROUTES[k].down,P=PROF[key];const dmax=P[P.length-1].d;
+      const d=Math.max(0,Math.min(dmax,(x-36)/(vb.width-44)*dmax));let i=P.findIndex(p=>p.d>=d);if(i<0)i=P.length-1;setProbe(k,key,i,true)};
+    svg.addEventListener('pointermove',move);svg.addEventListener('pointerdown',move);
+    svg.addEventListener('pointerleave',()=>{if(!st.play)hideProbe()});
+  }
+}
+const camAz=()=>{const v=camera.position.clone().sub(controls.target);return Math.atan2(v.x,v.z)};
+function view(v){
+  if(v==='home')flyHome();
+  else if(v==='top'){fly={t0:performance.now(),dur:1300,fp:camera.position.clone(),ft:controls.target.clone(),tp:new THREE.Vector3(sumW.x,30000,sumW.z+600),tt:new THREE.Vector3(sumW.x,1500,sumW.z+590)}}
+  else if(v==='summit')flyTo(W2(summit.x+250,summit.y-250,3700*st.exag),1900,camAz(),0.75);
+  else if(v==='hoei'){const p=D.places.find(p=>p.n.startsWith('宝永'));flyTo(W2(p.x-300,p.y,2500*st.exag),4200,Math.PI*0.75,0.38)}
+}
+function setExag(v){st.exag=v;world.scale.y=v}
+async function setTex(v){st.tex=v;if(v==='photo'){if(!texPhoto)texPhoto=await loadTex('photo.jpg');terrMat.map=texPhoto}else terrMat.map=texRelief;terrMat.needsUpdate=true}
+
+/* ---------------- live data (db doc live/now, written every few hours by a scheduled job) ---------------- */
+let LIVE=null,CFG=null,liveState='loading',MCP=null,refreshMsg='';
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const SYM=[['thunder','雷'],['heavysnow','大雪'],['lightsnow','小雪'],['snow','雪'],['sleet','雨夹雪'],['heavyrain','大雨'],['lightrain','小雨'],['rain','雨'],['fog','雾'],['clearsky','晴'],['fair','晴间多云'],['partlycloudy','多云'],['cloudy','阴']];
+const symTxt=c=>{if(!c)return '';const base=c.replace(/_(day|night|polartwilight)$/,'');for(const [k,v] of SYM)if(base.includes(k))return (base.includes('showers')&&!v.includes('阵')?'阵':'')+v;return base};
+const DIRS=['北','东北','东','东南','南','西南','西','西北'];
+const dirTxt=d=>d==null?'':DIRS[Math.round(((d%360)+360)%360/45)%8]+'风';
+const jmaDir=d=>d==null||d===0?'':['北北东','东北','东北东','东','东南东','东南','南南东','南','南南西','西南','西南西','西','西北西','西北','北北西','北'][(d-1)%16]+'风';
+const hhmm=iso=>{const d=new Date(iso);return d.toLocaleTimeString('zh-CN',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',hour12:false})};
+const mdhm=iso=>{const d=new Date(iso);return d.toLocaleString('zh-CN',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})};
+const ago=iso=>{const m=Math.round((Date.now()-new Date(iso))/60000);return m<1?'刚刚':m<60?m+' 分钟前':m<60*24?Math.floor(m/60)+' 小时'+(m%60?m%60+' 分':'')+'前':Math.floor(m/1440)+' 天前'};
+const isStale=()=>!LIVE||(Date.now()-new Date(LIVE.updated))>12*3600e3;
+const FCCOL={summit:'#E9EDF5',Y:'#F2C230',S:'#E9493E',G:'#3DB36B',F:'#3E86F0',h8:'#B9C3D6'};
+const FCSHORT={summit:'山顶',Y:'吉田',S:'须走',G:'御殿场',F:'富士宫',h8:'本八合目'};
+
+async function initLive(){
+  const c=window.claude;if(!c||!c.use){liveState='none';updateLiveUI();return}
+  initGH();
+  const db=await c.use('db');if(!db){liveState='none';updateLiveUI();return}
+  const timer=setTimeout(()=>{if(!LIVE){liveState='slow';updateLiveUI()}},10000);
+  db.doc('live/now').onSnapshot(snap=>{
+    if(!snap.metadata.fromCache)clearTimeout(timer);
+    if(snap.exists)acceptLive(snap.data(),'db');else if(!snap.metadata.fromCache&&!LIVE){liveState='empty';updateLiveUI()}
+  },()=>{clearTimeout(timer);if(!LIVE)liveState='err';updateLiveUI()});
+}
+/* GitHub route: a GitHub Actions job writes live.json to the data branch every 30 min; the page reads it through the viewer's GitHub connector */
+const GH={owner:'kyouhi-ctrl',repo:'fuji-live',path:'live.json',ref:'refs/heads/data',wf:'update.yml',branch:'main'};
+const GH_NAMES=['GitHub','github'];
+let ghServer=null,ghState='idle',ghMsg='',liveSrc='',ghUnsub=null;
+const ghInput=()=>({owner:GH.owner,repo:GH.repo,path:GH.path,ref:GH.ref});
+function parseGH(res){try{for(const b of (res?.content||[])){const t=b.type==='resource'?b.resource?.text:b.type==='text'?b.text:null;if(t&&t.trim().startsWith('{'))return JSON.parse(t)}
+  const p=res?.payload;if(p&&typeof p==='object'&&p.updated)return p}catch(e){}return null}
+function acceptLive(d,src){if(!d||!d.updated)return;if(LIVE&&String(d.updated)<String(LIVE.updated))return;LIVE=d;liveSrc=src;liveState='ok';updateLiveUI()}
+function ghErrText(e){return ({needs_reauth:'GitHub 连接已过期，请到 claude.ai 设置 → 连接器 里重新连接 GitHub。',server_not_connected:'这个账号在 claude.ai 里没有连接 GitHub（设置 → 连接器 里添加后再试）。',not_in_manifest:'你没有允许这个页面使用 GitHub，所以读不到自动更新的数据。',approval_required:'需要你在 claude.ai 里允许这个页面使用 GitHub。',blocked_by_policy:'组织策略不允许这个页面使用 GitHub。',tool_error:'GitHub 返回错误：'+String(e?.message||'').slice(0,120)})[e?.code]||('读取 GitHub 失败（'+(e?.code||'未知')+'）')}
+async function initGH(){
+  try{MCP=await window.claude.use('mcp')}catch(e){MCP=null}
+  if(!MCP){ghState='none';return}
+  let perm=null;try{perm=await window.claude.use('permissions')}catch(e){}
+  for(const n of GH_NAMES){let s='prompt';if(perm){try{s=await perm.state('mcp:'+n)}catch(e){s='unavailable'}}
+    if(s==='granted'){ghServer=n;startWatch();return}}
+  ghState='ask';if(st.tab==='live')renderPanel();
+}
+async function connectGH(){
+  ghState='asking';ghMsg='';renderPanel();
+  for(let k=0;k<GH_NAMES.length;k++){const n=GH_NAMES[k];
+    try{const r=await MCP.callTool(n,'get_file_contents',ghInput());ghServer=n;const d=parseGH(r);if(d)acceptLive(d,'github');startWatch();return}
+    catch(e){if(['server_not_connected','server_not_found'].includes(e?.code)&&k<GH_NAMES.length-1)continue;ghState='err';ghMsg=ghErrText(e);renderPanel();return}}
+}
+function startWatch(){
+  ghState='on';if(ghUnsub)ghUnsub();
+  ghUnsub=MCP.watchTool(ghServer,'get_file_contents',ghInput(),ev=>{
+    if(ev.type==='data'){const d=parseGH(ev.result);if(d){ghState='on';acceptLive(d,'github')}}
+    else{const deny=['needs_reauth','server_not_connected','blocked_by_policy','approval_required','not_in_manifest'].includes(ev.error?.code);if(deny)ghState='err';ghMsg=ghErrText(ev.error);if(st.tab==='live')renderPanel()}
+  },{refetchInterval:5*60e3});
+  if(st.tab==='live')renderPanel();
+}
+async function triggerGH(){
+  ghMsg='正在请求 GitHub 立即抓取…';renderPanel();
+  try{await MCP.callTool(ghServer,'actions_run_trigger',{method:'run_workflow',owner:GH.owner,repo:GH.repo,workflow_id:GH.wf,ref:GH.branch});
+    ghMsg='已让 GitHub 立即抓取，大约 1–2 分钟后这里会自动换成新数据。';
+    setTimeout(()=>{MCP.invalidate(ghServer,'get_file_contents').catch(()=>{})},75000);setTimeout(()=>{MCP.invalidate(ghServer,'get_file_contents').catch(()=>{})},150000);
+  }catch(e){ghMsg=ghErrText(e)}
+  renderPanel();
+}
+function updateLiveUI(){
+  const b=document.getElementById('liveBadge');const so=summitObs();
+  if(LIVE&&so&&so.temp!=null){b.hidden=false;b.classList.toggle('stale',isStale());
+    b.innerHTML=`<span class="pulse"></span>山顶实测 <b>${esc(so.temp.toFixed(1))}℃</b><span style="color:var(--mute)">${esc(hhmm(so.time))}</span>`}
+  else b.hidden=true;
+  if(st.tab==='live')renderPanel();
+  if(st.sel!=null&&!card.hidden)openCard(st.sel);
+}
+document.getElementById('liveBadge').onclick=()=>{st.tab='live';renderPanel();panel.classList.remove('min')};
+function summitObs(){return LIVE?.obs?.find(o=>o.code==='50066')||null}
+function fcIdx(){const s=LIVE?.fc?.[0]?.s;if(!s)return 0;const now=Date.now();let b=0;s.forEach((r,i)=>{if(Date.parse(r[0]+':00:00Z')<=now)b=i});return b}
+function fcAt(id,i){const f=LIVE?.fc?.find(f=>f.id===id);return f?f.s[Math.min(i,f.s.length-1)]:null}
+/* temperature now at altitude a: forecast profile across the six altitude points, nudged toward the summit observation */
+function liveT(a){
+  if(!LIVE?.fc?.length||isStale())return null;const i=fcIdx();
+  const pts=LIVE.fc.map(f=>[f.alt,f.s[Math.min(i,f.s.length-1)][1]]).sort((x,y)=>x[0]-y[0]);
+  let t;if(a<=pts[0][0])t=pts[0][1]+(pts[0][0]-a)*.006;else if(a>=pts[pts.length-1][0])t=pts[pts.length-1][1]-(a-pts[pts.length-1][0])*.006;
+  else for(let k=1;k<pts.length;k++)if(a<=pts[k][0]){const f=(a-pts[k-1][0])/(pts[k][0]-pts[k-1][0]);t=pts[k-1][1]+(pts[k][1]-pts[k-1][1])*f;break}
+  const so=summitObs(),sf=fcAt('summit',i);
+  if(so&&so.temp!=null&&sf&&(Date.now()-new Date(so.time))<6*3600e3)t+=(so.temp-sf[1])*Math.max(0,Math.min(1,(a-1440)/(3776-1440)));
+  return t;
+}
+function liveWind(a){if(!LIVE?.fc?.length||isStale())return null;const i=fcIdx();let best=null,bd=1e9;LIVE.fc.forEach(f=>{const d=Math.abs(f.alt-a);if(d<bd){bd=d;best=f}});return best.s[Math.min(i,best.s.length-1)]}
+function liveRow(a){const t=liveT(a);if(t==null)return '';const w=liveWind(a);
+  return `<dt>现在</dt><dd>约 <span class="num">${t.toFixed(0).replace('-0','0')}℃</span>${w?` · ${esc(symTxt(w[6]))} · ${esc(dirTxt(w[3]))} <span class="num">${esc(w[2])}</span> m/s`:''} <span style="color:var(--faint);font-size:11.5px">推算</span></dd>`}
+
+function seasonInfo(){
+  const now=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Tokyo'}));const y=now.getFullYear(),md=(now.getMonth()+1)*100+now.getDate();
+  if(md>=701&&md<=910){
+    if(y===2026){const all=md>=710;return {open:true,text:all?'登山季中：四条路线都已开放（到 9 月 10 日）。':'登山季中：吉田、须走已开放；富士宫、御殿场 7 月 10 日开放。'}}
+    return {open:true,text:'通常处于登山季（7 月上旬到 9 月 10 日），当年具体日期以官方公布为准。'}
+  }
+  return {open:false,text:`闭山期：现在的富士山是${md>=1001||md<=531?'冬季雪山':'残雪期'}，山小屋、厕所全部关闭，也没有救援体系，官方要求不要登山。下一季通常 7 月上旬开山，${md>910?y+1:y} 年的日期以官方公布为准。`};
+}
+function panelLive(){
+  const se=seasonInfo();
+  const head=`<h2>富士山现在怎么样</h2>`;
+  const seasonBox=`<div class="row" style="margin:6px 0 4px"><span class="pill ${se.open?'ok':'closed'}">${se.open?'登山季':'闭山期'}</span>${LIVE?.volcano?`<span class="pill ${LIVE.volcano.code==='level1'?'':'alert'}">火山：${esc(LIVE.volcano.code==='level1'?'警戒级别 1':LIVE.volcano.name)}</span>`:''}</div><p>${se.text}</p>`;
+  if(liveState==='none')return head+seasonBox+`<div class="box">实时数据只有在 claude.ai 里打开这个页面并登录后才能读取。</div>`;
+  if(!LIVE){const btn=refreshBtn();const msg={loading:'正在读取实时数据…',slow:'实时数据暂时读不到，可能是网络慢，稍后会自动出现。',empty:'还没有实时数据：定时更新任务还没有运行过。',err:'实时数据读取失败，刷新页面再试。'}[liveState]||'';return head+seasonBox+`<div class="box">${msg}${btn?`<div style="margin-top:8px">${btn}</div>`:''}</div>`}
+  const so=summitObs(),i=fcIdx(),sf=fcAt('summit',i);
+  const stale=isStale();
+  let h=head+seasonBox;
+  h+=`<div class="row" style="justify-content:space-between"><span class="src">数据更新于 ${esc(mdhm(LIVE.updated))}（${esc(ago(LIVE.updated))}）${stale?' <span class="stale-note">· 已超过 12 小时，可能过时</span>':''}</span>${refreshBtn()}</div>${srcLine()?`<p class="src" style="margin:6px 0 0">${esc(srcLine())}</p>`:''}${ghMsg?`<p class="src" style="margin:4px 0 0;color:#F5C08E">${esc(ghMsg)}</p>`:''}`;
+  if(so&&so.temp!=null){
+    h+=`<div class="hero"><div class="big">${esc(so.temp.toFixed(1))}<span style="font-size:22px">℃</span></div><div class="meta">山顶（剑峰旁的气象站，3775 m）<br>气象厅实测 · ${esc(hhmm(so.time))}${so.min!=null?` · 今天最低 <span class="num">${esc(so.min)}℃</span>`:''}${so.max!=null?` · 最高 <span class="num">${esc(so.max)}℃</span>`:''}</div></div>`;
+    if(sf)h+=`<p style="margin-top:6px">预报山顶此刻：${esc(symTxt(sf[6])||'—')}，${esc(dirTxt(sf[3]))} <span class="num">${esc(sf[2])} m/s</span>，体感约 <span class="num">${(so.temp-sf[2]).toFixed(0)}℃</span>（风速每 1 m/s 约降 1℃）。</p>`;
+  }
+  h+=fujimiHTML();
+  // trailheads now
+  const order=['summit','h8','F','Y','S','G'];
+  const rows=order.map(id=>{const f=LIVE.fc?.find(x=>x.id===id);if(!f)return '';const r=f.s[Math.min(i,f.s.length-1)];const t=liveT(f.alt);
+    return `<tr><td><span class="rn" style="--c:${FCCOL[id]}"><i></i>${esc(f.name)}</span></td><td class="r num">${esc(f.alt)}</td><td class="r num">${t!=null?t.toFixed(0).replace('-0','0')+'℃':'—'}</td><td class="r">${esc(symTxt(r[6]))}</td><td class="r"><span class="num">${esc(r[2])}</span> m/s</td></tr>`}).join('');
+  h+=`<h4>现在各处（推算）</h4><table class="tbl"><thead><tr><th>位置</th><th class="r">海拔</th><th class="r">气温</th><th class="r">天气</th><th class="r">风</th></tr></thead><tbody>${rows}</tbody></table>
+  <p class="src" style="margin-top:6px">按挪威气象局对每个海拔的逐小时预报，再用山顶实测值校正。地图上点任意小屋或合目，也会显示“现在”的推算值。</p>`;
+  h+=`<h4>未来 48 小时气温</h4>${fcChart('temp')}`;
+  h+=`<h4>未来 48 小时山顶风速</h4>${fcChart('wind')}`;
+  const sum=summ48();if(sum)h+=`<p>${sum}</p>`;
+  // base observations
+  const base=(LIVE.obs||[]).filter(o=>o.code!=='50066');
+  if(base.length)h+=`<h4>山脚气象站实测</h4><table class="tbl"><thead><tr><th>站点</th><th class="r">海拔</th><th class="r">气温</th><th class="r">风</th><th class="r">时间</th></tr></thead><tbody>${base.map(o=>`<tr><td>${esc(o.name)}</td><td class="r num">${esc(o.alt)}</td><td class="r num">${o.temp!=null?esc(o.temp.toFixed(1))+'℃':'—'}</td><td class="r">${o.wind!=null?`${esc(jmaDir(o.wdir))} <span class="num">${esc(o.wind)}</span>`:'—'}</td><td class="r num" style="color:var(--mute)">${esc(hhmm(o.time))}</td></tr>`).join('')}</tbody></table>`;
+  if(LIVE.news?.length)h+=`<h4>官方公告（富士登山オフィシャルサイト）</h4><ul class="news">${LIVE.news.map(n=>{const u=String(n.url||'');return `<li><a href="${u.startsWith('https://')?esc(u):'#'}" target="_blank" rel="noopener"><small>${esc(n.date)}${n.tag?' · '+esc(n.tag):''}</small><span>${esc(n.title)}</span></a></li>`}).join('')}</ul>`;
+  h+=`<h4>数据来源</h4><p class="src">山顶和山脚实测：日本气象厅 AMeDAS（每 10 分钟观测）。预报：挪威气象局 MET Norway Locationforecast（按海拔订正）。火山：气象厅火山警报。公告：富士登山オフィシャルサイト。看山指数：富士見予報（fuji-san.info）。开启自动更新后，GitHub 的定时任务每 30 分钟抓取一次（不消耗 Claude 额度）；不是秒级直播。</p>`;
+  return h;
+}
+function fujimiIdx(v){return Math.min(10,Math.ceil(v/10)+1)}
+function fujimiHTML(){
+  const fj=LIVE?.fujimi;if(!fj?.N?.length)return '';
+  const now=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Tokyo'}));
+  const key=d=>`${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+  const todayKey=key(now),slotNow=now.getHours()<12?'09':'15';
+  const N=fj.N.filter(r=>r[0].slice(0,10)>=todayKey).slice(0,14),S=fj.S.filter(r=>r[0].slice(0,10)>=todayKey).slice(0,14);
+  if(!N.length)return '';
+  const wk=['日','一','二','三','四','五','六'];
+  let g='<div></div>';
+  for(let k=0;k<N.length;k+=2){const [y,m,d]=N[k][0].slice(0,10).split('/').map(Number);const dt=new Date(y,m-1,d);g+=`<div class="h d">${m}/${d}<br><span style="color:var(--mute)">周${wk[dt.getDay()]}</span></div>`}
+  g+='<div></div>'+N.map(r=>`<div class="h">${r[0].slice(11,13)==='09'?'上':'下'}</div>`).join('');
+  const row=(lab,arr)=>`<div class="side">${lab}</div>`+arr.map(r=>{const i=fujimiIdx(r[1]);const isNow=r[0].slice(0,10)===todayKey&&r[0].slice(11,13)===slotNow;const past=r[0].slice(0,10)===todayKey&&slotNow==='15'&&r[0].slice(11,13)==='09';
+    return `<div class="c ${i<=3?'lo':''} ${isNow?'now':''} ${past?'past':''}" style="--a:${(0.06+i*0.075).toFixed(2)}" title="${esc(r[0])} 指数 ${i}">${i}</div>`}).join('');
+  g+=row('北侧<br>山梨',N)+row('南侧<br>静冈',S);
+  const cur=(arr)=>{const r=arr.find(r=>r[0].slice(0,10)===todayKey&&r[0].slice(11,13)===slotNow);return r?fujimiIdx(r[1]):null};
+  const cn=cur(N),cs=cur(S);
+  return `<h4>能不能看到富士山（富士見予報）</h4>
+  ${cn!=null?`<div class="fjnow"><span>今天${slotNow==='09'?'上午':'下午'}　北侧 <b>${cn}</b><span style="color:var(--mute)">/10</span></span><span>南侧 <b>${cs??'—'}</b><span style="color:var(--mute)">/10</span></span></div>`:''}
+  <div style="overflow-x:auto"><div class="fj" role="table" aria-label="未来7天上午和下午看到富士山的可能性指数">${g}</div></div>
+  <p class="src" style="margin-top:6px">指数 1–10，越大越可能从山脚看到富士山（不是云量，是“看得到”的可能性）。北侧是从山梨县河口湖、山中湖一带看，南侧是从静冈县富士市、沼津一带看。每天 16 点左右更新。来源：<a href="https://fuji-san.info/zh-cn/index.html" target="_blank" rel="noopener">富士見予報</a>（応用気象エンジニアリング，版权归该公司）。</p>`;
+}
+function refreshBtn(){
+  if(ghState==='on'&&ghServer)return `<button class="btn" id="refresh">↻ 立即更新</button>`;
+  if(ghState==='ask'||ghState==='err')return `<button class="btn pri" id="ghconnect">开启自动更新</button>`;
+  if(ghState==='asking')return `<button class="btn" disabled>连接中…</button>`;
+  return '';
+}
+function srcLine(){
+  if(ghState==='on'&&liveSrc==='github')return '来源：GitHub 自动更新（每 30 分钟抓取一次，页面每 5 分钟检查一次）';
+  if(ghState==='on')return '已连接 GitHub，正在读取自动更新的数据…';
+  if(ghState==='ask')return '现在显示的是手动更新的快照。点「开启自动更新」，允许页面通过你的 GitHub 连接读取每 30 分钟更新一次的数据（不消耗 Claude 额度）。';
+  return '';
+}
+function bindLive(){
+  const b=body.querySelector('#refresh');if(b)b.onclick=()=>{b.disabled=true;triggerGH()};
+  const g=body.querySelector('#ghconnect');if(g)g.onclick=()=>connectGH();
+  body.querySelectorAll('.chart[data-kind]').forEach(bindChart);
+}
+function summ48(){
+  const f=LIVE.fc?.find(x=>x.id==='summit');if(!f)return '';const i=fcIdx();const s=f.s.slice(i,i+48);if(!s.length)return '';
+  const tmin=Math.min(...s.map(r=>r[1])),tmax=Math.max(...s.map(r=>r[1])),wmax=Math.max(...s.map(r=>r[2]));
+  const pr=s.reduce((a,r)=>a+(r[5]||0),0);const snow=s.some(r=>(r[6]||'').includes('snow'));
+  return `未来 48 小时山顶：气温 <span class="num">${tmin.toFixed(0)}</span> 到 <span class="num">${tmax.toFixed(0)}℃</span>，最大风速 <span class="num">${wmax.toFixed(0)} m/s</span>，降水约 <span class="num">${pr.toFixed(0)} mm</span>${pr>0.5?(snow?'（以降雪为主）':''):''}。`;
+}
+/* forecast charts: one y-axis each; direct labels at the right end; crosshair + tooltip */
+const CH={};
+function fcChart(kind){
+  const i0=fcIdx();const ids=kind==='temp'?['summit','F','Y','S','G']:['summit'];
+  const series=ids.map(id=>{const f=LIVE.fc?.find(x=>x.id===id);return f?{id,name:FCSHORT[id],col:FCCOL[id],pts:f.s.slice(i0,i0+49).map(r=>({t:Date.parse(r[0]+':00:00Z'),v:kind==='temp'?r[1]:r[2],r}))}:null}).filter(Boolean);
+  if(!series.length)return '';
+  const W=358,H=kind==='temp'?190:120,L=30,R=kind==='temp'?50:14,T=10,B=22;
+  const t0=series[0].pts[0].t,t1=series[0].pts[series[0].pts.length-1].t;
+  let vmin=Math.min(...series.flatMap(s=>s.pts.map(p=>p.v))),vmax=Math.max(...series.flatMap(s=>s.pts.map(p=>p.v)));
+  const step=kind==='temp'?5:5;vmin=kind==='wind'?0:Math.floor(vmin/step)*step;vmax=Math.ceil((vmax+.01)/step)*step;
+  const X=t=>L+(t-t0)/(t1-t0)*(W-L-R),Y=v=>H-B-(v-vmin)/(vmax-vmin)*(H-T-B);
+  let g='';
+  for(let v=vmin;v<=vmax;v+=step){g+=`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="rgba(160,180,220,${v===0&&kind==='temp'?.35:.12})"/><text x="${L-4}" y="${Y(v)+3.5}" text-anchor="end" font-size="9.5" fill="#97A3BC" font-family="JetBrains Mono">${v}</text>`}
+  // x ticks at JST 00/06/12/18
+  for(let t=Math.ceil(t0/3600e3)*3600e3;t<=t1;t+=3600e3){const hj=(new Date(t).getUTCHours()+9)%24;if(hj%6)continue;const x=X(t);
+    const lab=hj===0?new Date(t).toLocaleDateString('zh-CN',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric'}):String(hj).padStart(2,'0')+'时';
+    g+=`<line x1="${x}" x2="${x}" y1="${T}" y2="${H-B}" stroke="rgba(160,180,220,${hj===0?.22:.07})"/><text x="${x}" y="${H-7}" text-anchor="middle" font-size="9.5" fill="${hj===0?'#E9EDF5':'#97A3BC'}" font-family="JetBrains Mono">${lab}</text>`}
+  if(kind==='wind'){const s=series[0];let a=`M${X(s.pts[0].t)} ${Y(0)}`;s.pts.forEach(p=>a+=`L${X(p.t).toFixed(1)} ${Y(p.v).toFixed(1)}`);a+=`L${X(t1)} ${Y(0)}Z`;g+=`<path d="${a}" fill="rgba(233,237,245,.10)"/>`}
+  series.forEach(s=>{let d='';s.pts.forEach((p,k)=>d+=(k?'L':'M')+X(p.t).toFixed(1)+' '+Y(p.v).toFixed(1));g+=`<path d="${d}" fill="none" stroke="${s.col}" stroke-width="${s.id==='summit'?2.4:2}" stroke-linejoin="round"/>`});
+  if(kind==='temp'){ // direct labels, nudged apart
+    const labs=series.map(s=>({s,y:Y(s.pts[s.pts.length-1].v)})).sort((a,b)=>a.y-b.y);
+    for(let it=0;it<20;it++)for(let k=1;k<labs.length;k++){const dy=labs[k].y-labs[k-1].y;if(dy<12){labs[k].y+=(12-dy)/2;labs[k-1].y-=(12-dy)/2}}
+    labs.forEach(l=>g+=`<text x="${W-R+5}" y="${l.y+3.5}" font-size="10.5" fill="#D3DAE8">${l.s.name}</text>`);
+  }
+  g+=`<line class="cx" x1="0" x2="0" y1="${T}" y2="${H-B}" stroke="#fff" stroke-opacity="0"/>`;
+  series.forEach(s=>g+=`<circle class="cd" data-id="${s.id}" r="3.5" fill="${s.col}" stroke="#0F1526" stroke-width="2" opacity="0"/>`);
+  CH[kind]={series,X,Y,W,L,R,t0,t1};
+  const unit=kind==='temp'?'℃':'m/s';
+  return `<div class="chart" data-kind="${kind}"><svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;touch-action:pan-y" role="img" aria-label="${kind==='temp'?'未来48小时各海拔气温预报':'未来48小时山顶风速预报'}">${g}</svg><div class="tip" hidden></div></div>
+  ${kind==='temp'?`<div class="row" style="gap:12px;font-size:12px;color:var(--mute)">${series.map(s=>`<span class="rn" style="--c:${s.col};font-weight:400"><i></i>${s.name} ${LIVE.fc.find(f=>f.id===s.id).alt} m</span>`).join('')}</div>`:''}
+  <p class="src" style="margin:2px 0 0">单位：${unit}。横轴是日本时间，手指或鼠标在图上滑动看具体数值。</p>`;
+}
+function bindChart(el){
+  const kind=el.dataset.kind,c=CH[kind];if(!c)return;const svg=el.querySelector('svg'),tip=el.querySelector('.tip');
+  const move=e=>{const r=svg.getBoundingClientRect();const x=(e.clientX-r.left)/r.width*c.W;const t=c.t0+(x-c.L)/(c.W-c.L-c.R)*(c.t1-c.t0);
+    const pts=c.series[0].pts;let k=0,bd=1e18;pts.forEach((p,j)=>{const d=Math.abs(p.t-t);if(d<bd){bd=d;k=j}});
+    const tx=c.X(pts[k].t);svg.querySelector('.cx').setAttribute('x1',tx);svg.querySelector('.cx').setAttribute('x2',tx);svg.querySelector('.cx').setAttribute('stroke-opacity',.4);
+    c.series.forEach(s=>{const cd=svg.querySelector(`.cd[data-id="${s.id}"]`);const p=s.pts[k];if(!p)return;cd.setAttribute('cx',c.X(p.t));cd.setAttribute('cy',c.Y(p.v));cd.setAttribute('opacity',1)});
+    const p0=c.series[0].pts[k];
+    tip.innerHTML=`<div style="color:var(--mute)">${esc(mdhm(new Date(p0.t).toISOString()))} · ${esc(symTxt(p0.r[6]))}</div>`+[...c.series].sort((a,b)=>(b.pts[k]?.v??0)-(a.pts[k]?.v??0)).map(s=>s.pts[k]?`<div style="--c:${s.col}"><i></i>${s.name} <b>${s.pts[k].v}${kind==='temp'?'℃':' m/s'}</b>${kind==='wind'?' '+esc(dirTxt(s.pts[k].r[3])):''}</div>`:'').join('');
+    tip.hidden=false;const px=tx/c.W*r.width;tip.style.left=Math.max(0,Math.min(r.width-tip.offsetWidth,px+(px>r.width/2?-tip.offsetWidth-12:12)))+'px';};
+  svg.addEventListener('pointermove',move);svg.addEventListener('pointerdown',move);
+  svg.addEventListener('pointerleave',()=>{tip.hidden=true;svg.querySelector('.cx').setAttribute('stroke-opacity',0);svg.querySelectorAll('.cd').forEach(d=>d.setAttribute('opacity',0))});
+}
+
+/* ---------------- probe / play ---------------- */
+const probe=document.getElementById('probe');let probeW=null;
+function setProbe(k,key,i,fromChart){
+  const P=PROF[key],p=P[i],r=ROUTES[k];probeW=W2(p.x,p.y,p.h+12);probe.style.display='block';probe.style.setProperty('--c',r.col);
+  const total=hm(st.dir==='up'?r.upT:r.downT);
+  probe.querySelector('.read').innerHTML=`<b>${Math.round(p.h)} m</b> · ${(p.d/1000).toFixed(1)} km · 约 ${fmtHM(effortFrac(key,i)*total)} · <b>${fmtT(T(p.h,st.month,0))}</b>`;
+  const svg=body.querySelector('#prof');if(svg){const vb=svg.viewBox.baseVal;const dmax=P[P.length-1].d;const x=36+p.d/dmax*(vb.width-44);
+    const hmin=Math.floor((Math.min(...P.map(q=>q.h))-100)/500)*500;const y=vb.height-24-(p.h-hmin)/(3800-hmin)*(vb.height-34);
+    const c=svg.querySelector('#pcur'),d=svg.querySelector('#pdot');c.setAttribute('x1',x);c.setAttribute('x2',x);c.setAttribute('opacity',.5);d.setAttribute('cx',x);d.setAttribute('cy',y);d.setAttribute('opacity',1)}
+}
+function hideProbe(){probe.style.display='none';probeW=null;const svg=body.querySelector('#prof');if(svg){svg.querySelector('#pcur').setAttribute('opacity',0);svg.querySelector('#pdot').setAttribute('opacity',0)}}
+function startPlay(){
+  const k=st.route;if(!k)return;const key=st.dir==='up'?ROUTES[k].up:ROUTES[k].down;const P=PROF[key];
+  st.play={k,key,t0:performance.now(),dur:Math.max(26000,P[P.length-1].d*3.2)};
+  const p=P[0];const tgt=W2(p.x,p.y,p.h*st.exag);flyTo(tgt,1800,Math.atan2(p.x-summit.x,p.y-summit.y)+0.5,0.45,1200);
+  st.play.t0+=1200;renderPanel();
+}
+function stopPlay(){if(!st.play)return;st.play=null;hideProbe();if(st.tab==='route')renderPanel()}
+function stepPlay(now){
+  const s=st.play;if(!s||fly)return;const P=PROF[s.key];let f=(now-s.t0)/s.dur;if(f<0)return;
+  if(f>=1){f=1}
+  const dmax=P[P.length-1].d,d=f*dmax;let i=P.findIndex(p=>p.d>=d);if(i<0)i=P.length-1;
+  setProbe(s.k,s.key,i);
+  const p=P[i];const nt=W2(p.x,p.y,p.h*st.exag);const delta=nt.clone().sub(controls.target);
+  controls.target.add(delta.multiplyScalar(.08));camera.position.add(delta);
+  if(f>=1){st.play=null;renderPanel()}
+}
+
+/* ---------------- info card ---------------- */
+const card=document.getElementById('card');
+function openCard(i,fly_=false){
+  st.sel=i;const p=D.places[i];const m=st.month;
+  const rts=p.r?[...p.r].map(k=>`<span class="tag" style="--c:${ROUTES[k].col}"><i></i>${ROUTES[k].name}</span>`).join(''):'';
+  const kind=p.k==='hut'?'山小屋':p.k==='station'?'合目 / 登山口':'地标';
+  const altLine=p.src==='pub'&&Math.abs(p.e-p.de)>40?`<span class="num">${p.e} m</span> <span style="color:var(--mute)">（招牌标高；地形实测约 ${Math.round(p.de/10)*10} m）</span>`:`<span class="num">${p.e} m</span>`;
+  const a=p.de;
+  card.innerHTML=`<button class="x" aria-label="关闭">×</button><h3>${p.n}</h3><div class="sub">${kind} · ${p.s} ${rts}</div>
+  <dl class="kv"><dt>海拔</dt><dd>${altLine}</dd><dt>${m} 月常年</dt><dd>白天约 <span class="num">${fmtT(T(a,m,1))}</span> · 清晨约 <span class="num">${fmtT(T(a,m,2))}</span></dd>
+  ${liveRow(a)}<dt>到山顶</dt><dd>还要爬 <span class="num">${Math.max(0,Math.round((3776-a)/10)*10)} m</span></dd></dl>
+  ${p.t?`<p class="note">${p.t}</p>`:''}${p.k==='hut'?'<p class="src" style="margin:6px 0 0">山小屋要提前预约，只在登山季营业。</p>':''}`;
+  card.hidden=false;card.querySelector('.x').onclick=closeCard;placeCard();
+  pins.forEach((o,j)=>o.el.classList.toggle('sel',j===i));
+}
+function closeCard(){card.hidden=true;st.sel=null;pins.forEach(o=>o.el.classList.remove('sel'))}
+function placeCard(){
+  if(card.hidden||st.sel==null||innerWidth<=820)return;const o=pins[st.sel];if(!o.sx&&o.sx!==0)return;
+  const pw=innerWidth-410;let x=o.sx+16,y=o.sy-30;if(x+310>pw)x=o.sx-316;x=Math.max(16,x);y=Math.max(90,Math.min(innerHeight-card.offsetHeight-16,y));
+  card.style.left=x+'px';card.style.top=y+'px';
+}
+canvas.addEventListener('click',()=>{if(!dragMoved)closeCard()});
+let dragMoved=false,pd=null;canvas.addEventListener('pointerdown',e=>{pd=[e.clientX,e.clientY];dragMoved=false;if(fly)fly=null});
+canvas.addEventListener('pointermove',e=>{if(pd&&Math.hypot(e.clientX-pd[0],e.clientY-pd[1])>5)dragMoved=true});
+document.getElementById('compass').onclick=()=>{stopPlay();flyHome()};
+addEventListener('keydown',e=>{if(e.key==='Escape')closeCard()});
+
+/* ---------------- per-frame pin layout ---------------- */
+const tmpV=new THREE.Vector3();
+function occluded(wp){ // march along the ray from camera to point over the heightfield
+  const c=camera.position;const n=48;
+  for(let s=1;s<n-2;s++){const t=s/n;const x=c.x+(wp.x-c.x)*t,y=c.y+(wp.y-c.y)*t,z=c.z+(wp.z-c.z)*t;
+    const lx=x+KX/2,ly=z+KY/2;if(lx<0||ly<0||lx>KX||ly>KY)continue;if(hAt(lx,ly)*st.exag>y+4)return true}
+  return false;
+}
+let frame=0;
+function layoutPins(){
+  const w=canvas.clientWidth,h=canvas.clientHeight;const camD=camera.position.distanceTo(controls.target);
+  const panelLeft=innerWidth>820?innerWidth-410:innerWidth;const panelTop=innerWidth>820?innerHeight:innerHeight*(panel.classList.contains('min')?1:.54);
+  const recheck=frame%4===0;
+  const cand=[];
+  pins.forEach((o,i)=>{const p=o.p;
+    let vis=true;if(p.k==='hut'&&!st.showHuts)vis=false;
+    const inRoute=st.route===null||p.r.includes(st.route)||p.k==='mark';
+    const wp=W2(p.x,p.y,p.de*st.exag+6);const dist=camera.position.distanceTo(wp);
+    tmpV.copy(wp).project(camera);
+    if(tmpV.z>1||Math.abs(tmpV.x)>1.1||Math.abs(tmpV.y)>1.1)vis=false;
+    if(p.k==='hut'&&dist>16000&&st.route===null)vis=false;
+    if(recheck&&vis)o.occ=occluded(wp);
+    if(!vis||o.occ){o.el.classList.add('hidden');o.sx=null;return}
+    const sx=(tmpV.x+1)/2*w,sy=(1-tmpV.y)/2*h;o.sx=sx;o.sy=sy;
+    o.el.classList.remove('hidden');o.el.style.transform=`translate(${sx.toFixed(1)}px,${sy.toFixed(1)}px)`;
+    o.el.classList.toggle('dim',!inRoute);
+    let want=st.showLabels&&inRoute;
+    if(p.k==='hut')want=want&&(dist<5200||(st.route&&dist<9000));
+    if(i===hoverPin||i===st.sel)want=true;
+    if(sx>panelLeft-10||sy>panelTop)want=want&&(i===st.sel);
+    let pr=o.prio+(st.route&&p.r.includes(st.route)?3:0)+(i===hoverPin||i===st.sel?10:0)-dist/1e6;
+    cand.push({o,sx,sy,want,pr});
+  });
+  cand.sort((a,b)=>b.pr-a.pr);const boxes=[];
+  for(const c of cand){let show=false;
+    if(c.want){if(!c.o.w)c.o.w=c.o.el.querySelector('.lab').offsetWidth||80;
+      const b=[c.sx+6,c.sy-11,c.sx+12+c.o.w,c.sy+10];
+      show=!boxes.some(q=>b[0]<q[2]&&b[2]>q[0]&&b[1]<q[3]&&b[3]>q[1]);if(show)boxes.push(b)}
+    c.o.el.classList.toggle('show',show);
+  }
+  if(probeW){tmpV.copy(probeW);tmpV.y*=st.exag;tmpV.project(camera);probe.style.transform=`translate(${((tmpV.x+1)/2*w).toFixed(1)}px,${((1-tmpV.y)/2*h).toFixed(1)}px)`}
+}
+
+/* ---------------- loop ---------------- */
+function resize(){const w=canvas.clientWidth,h=canvas.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;
+  // keep the mountain centred in the free area beside the panel on desktop
+  if(innerWidth>820){camera.setViewOffset(w,h,195,0,w,h)}else{camera.setViewOffset(w,h,0,h*.2,w,h)}
+  camera.updateProjectionMatrix();resV.set(w*renderer.getPixelRatio(),h*renderer.getPixelRatio());lines.forEach(l=>{l.main.material.resolution.copy(resV);l.ghost.material.resolution.copy(resV)})}
+addEventListener('resize',resize);resize();
+const needle=document.getElementById('needle');
+function loop(now){
+  requestAnimationFrame(loop);frame++;
+  if(fly){let t=(now-fly.t0)/fly.dur;if(t>=1){t=1}const e=ease(t);camera.position.lerpVectors(fly.fp,fly.tp,e);controls.target.lerpVectors(fly.ft,fly.tt,e);if(t>=1)fly=null}
+  stepPlay(now);
+  controls.update();
+  renderer.render(scene,camera);
+  layoutPins();placeCard();
+  needle.setAttribute('transform',`rotate(${(-camAz()*180/Math.PI+180).toFixed(1)})`);
+}
+renderChips();styleLines();renderPanel();initLive();
+requestAnimationFrame(loop);
+document.getElementById('loading').classList.add('done');
+window.__fuji={st,selectRoute,flyTo,view,openCard,camera,controls};
+})().catch(err=>{document.getElementById('loading').textContent='加载失败：'+err.message;console.error(err)});
+</script>
