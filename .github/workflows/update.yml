@@ -21,9 +21,6 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 8
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -50,6 +47,14 @@ jobs:
         with:
           path: _site
 
+  deploy:
+    needs: update
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
       - name: 发布到 GitHub Pages
         id: deploy
         uses: actions/deploy-pages@v4
