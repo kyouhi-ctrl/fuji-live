@@ -21,7 +21,7 @@
 
 ## 实时数据
 
-- 主路径：GitHub Actions（`.github/workflows/update.yml`，每 30 分钟）运行 `fetch.py`，强推到 `data` 分支的 `live.json`。网页用 GitHub 连接器的 `get_file_contents`（owner `kyouhi-ctrl`、repo `fuji-live`、path `live.json`、ref `refs/heads/data`）读取，每 5 分钟检查一次；「立即更新」调用 `actions_run_trigger`（`run_workflow`，`update.yml`，ref `main`）。
+- 主路径：GitHub Actions（`.github/workflows/update.yml`，目前每天日本时间 12 点一次；制作人要求时再调高，频率与免费额度见 README）运行 `fetch.py`，强推到 `data` 分支的 `live.json`。网页用 GitHub 连接器的 `get_file_contents`（owner `kyouhi-ctrl`、repo `fuji-live`、path `live.json`、ref `refs/heads/data`）读取，每 5 分钟检查一次；「立即更新」调用 `actions_run_trigger`（`run_workflow`，`update.yml`，ref `main`）。
 - 备用路径：网页的 db 文档 `live/now`。制作人要求手动更新时，运行 `python3 fetch.py /tmp/live.json`，再用 ArtifactData `set` 写入（先 `get` 拿 version 作 `if_version`）。网页会显示两者中较新的一份。
 - 网页不能直接访问外部网站（CSP），所以所有实时数据都只能经过 GitHub 连接器或 db 进来。
 

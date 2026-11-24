@@ -2,7 +2,7 @@ name: 更新富士山实况
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # 每 30 分钟（GitHub 高峰期可能晚几分钟）
+    - cron: "0 3 * * *"   # 每天日本时间 12:00（UTC 3:00；GitHub 高峰期可能晚几分钟到半小时）
   workflow_dispatch:         # 网页上的「立即更新」按钮也走这里
 
 permissions:
