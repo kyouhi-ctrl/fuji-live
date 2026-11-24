@@ -23,9 +23,11 @@
 
 - 主路径：GitHub Actions（`.github/workflows/update.yml`，目前每天日本时间 12 点一次；制作人要求时再调高，频率与免费额度见 README）运行 `fetch.py`，强推到 `data` 分支的 `live.json`。网页用 GitHub 连接器的 `get_file_contents`（owner `kyouhi-ctrl`、repo `fuji-live`、path `live.json`、ref `refs/heads/data`）读取，每 5 分钟检查一次；「立即更新」调用 `actions_run_trigger`（`run_workflow`，`update.yml`，ref `main`）。
 - 备用路径：网页的 db 文档 `live/now`。制作人要求手动更新时，运行 `python3 fetch.py /tmp/live.json`，再用 ArtifactData `set` 写入（先 `get` 拿 version 作 `if_version`）。网页会显示两者中较新的一份。
-- 网页不能直接访问外部网站（CSP），所以所有实时数据都只能经过 GitHub 连接器或 db 进来。
+- 网页不能直接访问外部网站（CSP），所以 Claude 里的网页只能经过 GitHub 连接器或 db 拿实时数据。
+- 公开网址 https://kyouhi-ctrl.github.io/fuji-live/ ：同一个工作流用 `build/make_public.py` 把 `site/` 和当次的 `live.json` 打包发布到 GitHub Pages；页面检测到不在 Claude 里时直接读同目录的 `live.json`。改了 `site/` 推到 main 也会自动重新发布。
+- 页面上不写资料来源（制作人 2026-11-24 定下：观众不关心），只在「显示」页底部留一行小字署名（OpenStreetMap、国土地理院的使用条款要求），不要删。
 
 ## 注意
 
-- 富士見予報（fuji-san.info）的数据版权归応用気象エンジニアリング，只用于制作人个人查看；仓库保持私有，公开分享或用于视频前先征得对方同意。
+- 仓库已公开（为了免费用 GitHub Pages）。富士見予報（fuji-san.info，応用気象エンジニアリング）的看山指数在公开网址上照样显示，是制作人 2026-11-24 的决定；用于视频前仍建议先征得对方同意。
 - 每年登山季规则（开山日期、入山费、限流）会变：`site/index.html` 里 `ROUTES`、「整体」页的规则框和 `seasonInfo()` 写的是 2026 年的，新一季官方公布后更新。

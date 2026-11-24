@@ -429,7 +429,7 @@ function panelAll(){
    <li>吉田路线每天限 4000 人，要预约。静冈县三条路线要先在网上完成“事前学习”。</li>
    <li>关山后山小屋、厕所全部关闭，没有救援体系，不要登山。</li></ul>
    <p class="src" style="margin:6px 0 0">2026 季已经结束，2027 年的规则以届时官方公布为准。</p></div>
-  ${srcHTML()}`;
+  `;
 }
 function ladderSVG(){
   const w=358,h=260,top=16,bot=236,lo=1300,hi=3800;const Y=a=>bot-(a-lo)/(hi-lo)*(bot-top);
@@ -500,9 +500,9 @@ function panelTemp(){
   <table class="tbl"><thead><tr><th>位置</th><th class="r">海拔</th><th class="r">白天最高</th><th class="r">平均</th><th class="r">清晨最低</th></tr></thead><tbody>${rows}</tbody></table>
   <div class="box"><b>${m} 月山顶</b>：平均 <span class="num">${mean}℃</span>，最低 <span class="num">${mn}℃</span>，平均风速 <span class="num">${wind} m/s</span>。
   <p style="margin:6px 0 0">风速每增加 1 m/s，体感温度大约再低 1℃。按平均风速算，${m} 月清晨在山顶的体感接近 <span class="num">${fmtT(mn-wind)}</span>。</p></div>
-  <div class="box"><b>换算方法</b><p style="margin:4px 0 0">山顶的数字来自日本气象厅富士山观测站（3775 m）1991–2020 年平年值。其他海拔按每升高 100 米降 0.6℃ 推算，是平均情况；遇到下雨、起风或晴朗无风的夜晚，实际会差好几度。</p></div>
+  <div class="box"><b>怎么算的</b><p style="margin:4px 0 0">山顶的数字是 1991–2020 年的长期平均值。其他海拔按每升高 100 米降 0.6℃ 推算，是平均情况；遇到下雨、起风或晴朗无风的夜晚，实际会差好几度。</p></div>
   <div class="box"><b>穿什么</b><ul><li>五合目：长袖、薄外套就够。</li><li>七、八合目往上：抓绒或薄羽绒 + 防风防水的冲锋衣裤，帽子、手套。</li><li>山顶等日出：按冬天准备，羽绒服很常见。</li><li>下山砂砾路：护腿（防砂进鞋）、口罩、太阳镜。</li></ul></div>
-  ${srcHTML()}`;
+  `;
 }
 function panelView(){
   return `<h2>显示设置</h2><div class="layers">
@@ -526,7 +526,7 @@ function panelView(){
   </div>
   ${srcHTML()}`;
 }
-function srcHTML(){return `<h4>资料来源</h4><p class="src">地形：国土地理院 数值标高模型（地理院タイル DEM，约 10 m 网格）；航拍：国土地理院 シームレス空中写真。<br>登山道、小屋和合目位置：© OpenStreetMap contributors（ODbL）。<br>山小屋名单、路线距离与时间、开山日期：<a href="https://www.fujisan-climb.jp/comparison-of-routes" target="_blank" rel="noopener">富士登山オフィシャルサイト</a>（2026）。<br>气温：<a href="https://www.data.jma.go.jp/stats/etrn/view/nml_sfc_ym.php?prec_no=50&block_no=47639" target="_blank" rel="noopener">気象庁 富士山 平年値</a>。<br>小屋标高：有招牌标高的用招牌值，没有的用地形数据实测值；两者有时差几十米。</p>`}
+function srcHTML(){return `<p class="src" style="margin-top:28px;font-size:10.5px;opacity:.7">地图数据 © OpenStreetMap 贡献者 · 地形 国土地理院 · 看山指数 fuji-san.info</p>`}
 function bindPanel(){
   body.querySelectorAll('[data-r]').forEach(e=>e.onclick=()=>selectRoute(e.dataset.r));
   body.querySelectorAll('[data-dir]').forEach(e=>e.onclick=()=>{st.dir=e.dataset.dir;stopPlay();renderPanel()});
@@ -573,7 +573,10 @@ const FCCOL={summit:'#E9EDF5',Y:'#F2C230',S:'#E9493E',G:'#3DB36B',F:'#3E86F0',h8
 const FCSHORT={summit:'山顶',Y:'吉田',S:'须走',G:'御殿场',F:'富士宫',h8:'本八合目'};
 
 async function initLive(){
-  const c=window.claude;if(!c||!c.use){liveState='none';updateLiveUI();return}
+  const c=window.claude;
+  if(!c||!c.use){ // public copy on GitHub Pages: live.json sits next to the page
+    try{const r=await fetch('live.json',{cache:'no-cache'});if(r.ok){ghState='pages';acceptLive(await r.json(),'pages');return}}catch(e){}
+    liveState='none';updateLiveUI();return}
   initGH();
   const db=await c.use('db');if(!db){liveState='none';updateLiveUI();return}
   const timer=setTimeout(()=>{if(!LIVE){liveState='slow';updateLiveUI()}},10000);
@@ -659,14 +662,14 @@ function panelLive(){
   const se=seasonInfo();
   const head=`<h2>富士山现在怎么样</h2>`;
   const seasonBox=`<div class="row" style="margin:6px 0 4px"><span class="pill ${se.open?'ok':'closed'}">${se.open?'登山季':'闭山期'}</span>${LIVE?.volcano?`<span class="pill ${LIVE.volcano.code==='level1'?'':'alert'}">火山：${esc(LIVE.volcano.code==='level1'?'警戒级别 1':LIVE.volcano.name)}</span>`:''}</div><p>${se.text}</p>`;
-  if(liveState==='none')return head+seasonBox+`<div class="box">实时数据只有在 claude.ai 里打开这个页面并登录后才能读取。</div>`;
+  if(liveState==='none')return head+seasonBox+`<div class="box">实时数据暂时读不到，稍后刷新页面再试。</div>`;
   if(!LIVE){const btn=refreshBtn();const msg={loading:'正在读取实时数据…',slow:'实时数据暂时读不到，可能是网络慢，稍后会自动出现。',empty:'还没有实时数据：定时更新任务还没有运行过。',err:'实时数据读取失败，刷新页面再试。'}[liveState]||'';return head+seasonBox+`<div class="box">${msg}${btn?`<div style="margin-top:8px">${btn}</div>`:''}</div>`}
   const so=summitObs(),i=fcIdx(),sf=fcAt('summit',i);
   const stale=isStale();
   let h=head+seasonBox;
   h+=`<div class="row" style="justify-content:space-between"><span class="src">数据更新于 ${esc(mdhm(LIVE.updated))}（${esc(ago(LIVE.updated))}）${stale?' <span class="stale-note">· 已超过一天没更新，可能过时</span>':''}</span>${refreshBtn()}</div>${srcLine()?`<p class="src" style="margin:6px 0 0">${esc(srcLine())}</p>`:''}${ghMsg?`<p class="src" style="margin:4px 0 0;color:#F5C08E">${esc(ghMsg)}</p>`:''}`;
   if(so&&so.temp!=null){
-    h+=`<div class="hero"><div class="big">${esc(so.temp.toFixed(1))}<span style="font-size:22px">℃</span></div><div class="meta">山顶（剑峰旁的气象站，3775 m）<br>气象厅实测 · ${esc(hhmm(so.time))}${so.min!=null?` · 今天最低 <span class="num">${esc(so.min)}℃</span>`:''}${so.max!=null?` · 最高 <span class="num">${esc(so.max)}℃</span>`:''}</div></div>`;
+    h+=`<div class="hero"><div class="big">${esc(so.temp.toFixed(1))}<span style="font-size:22px">℃</span></div><div class="meta">山顶（剑峰旁的气象站，3775 m）<br>实测 · ${esc(hhmm(so.time))}${so.min!=null?` · 今天最低 <span class="num">${esc(so.min)}℃</span>`:''}${so.max!=null?` · 最高 <span class="num">${esc(so.max)}℃</span>`:''}</div></div>`;
     if(sf)h+=`<p style="margin-top:6px">预报山顶此刻：${esc(symTxt(sf[6])||'—')}，${esc(dirTxt(sf[3]))} <span class="num">${esc(sf[2])} m/s</span>，体感约 <span class="num">${(so.temp-sf[2]).toFixed(0)}℃</span>（风速每 1 m/s 约降 1℃）。</p>`;
   }
   h+=fujimiHTML();
@@ -675,15 +678,14 @@ function panelLive(){
   const rows=order.map(id=>{const f=LIVE.fc?.find(x=>x.id===id);if(!f)return '';const r=f.s[Math.min(i,f.s.length-1)];const t=liveT(f.alt);
     return `<tr><td><span class="rn" style="--c:${FCCOL[id]}"><i></i>${esc(f.name)}</span></td><td class="r num">${esc(f.alt)}</td><td class="r num">${t!=null?t.toFixed(0).replace('-0','0')+'℃':'—'}</td><td class="r">${esc(symTxt(r[6]))}</td><td class="r"><span class="num">${esc(r[2])}</span> m/s</td></tr>`}).join('');
   h+=`<h4>现在各处（推算）</h4><table class="tbl"><thead><tr><th>位置</th><th class="r">海拔</th><th class="r">气温</th><th class="r">天气</th><th class="r">风</th></tr></thead><tbody>${rows}</tbody></table>
-  <p class="src" style="margin-top:6px">按挪威气象局对每个海拔的逐小时预报，再用山顶实测值校正。地图上点任意小屋或合目，也会显示“现在”的推算值。</p>`;
+  <p class="src" style="margin-top:6px">地图上点任意小屋或合目，也会显示那里“现在”的气温。</p>`;
   h+=`<h4>未来 48 小时气温</h4>${fcChart('temp')}`;
   h+=`<h4>未来 48 小时山顶风速</h4>${fcChart('wind')}`;
   const sum=summ48();if(sum)h+=`<p>${sum}</p>`;
   // base observations
   const base=(LIVE.obs||[]).filter(o=>o.code!=='50066');
   if(base.length)h+=`<h4>山脚气象站实测</h4><table class="tbl"><thead><tr><th>站点</th><th class="r">海拔</th><th class="r">气温</th><th class="r">风</th><th class="r">时间</th></tr></thead><tbody>${base.map(o=>`<tr><td>${esc(o.name)}</td><td class="r num">${esc(o.alt)}</td><td class="r num">${o.temp!=null?esc(o.temp.toFixed(1))+'℃':'—'}</td><td class="r">${o.wind!=null?`${esc(jmaDir(o.wdir))} <span class="num">${esc(o.wind)}</span>`:'—'}</td><td class="r num" style="color:var(--mute)">${esc(hhmm(o.time))}</td></tr>`).join('')}</tbody></table>`;
-  if(LIVE.news?.length)h+=`<h4>官方公告（富士登山オフィシャルサイト）</h4><ul class="news">${LIVE.news.map(n=>{const u=String(n.url||'');return `<li><a href="${u.startsWith('https://')?esc(u):'#'}" target="_blank" rel="noopener"><small>${esc(n.date)}${n.tag?' · '+esc(n.tag):''}</small><span>${esc(n.title)}</span></a></li>`}).join('')}</ul>`;
-  h+=`<h4>数据来源</h4><p class="src">山顶和山脚实测：日本气象厅 AMeDAS（每 10 分钟观测）。预报：挪威气象局 MET Norway Locationforecast（按海拔订正）。火山：气象厅火山警报。公告：富士登山オフィシャルサイト。看山指数：富士見予報（fuji-san.info）。开启自动更新后，GitHub 的定时任务每天中午 12 点（日本时间）抓取一次，也可以点「立即更新」（都不消耗 Claude 额度）；不是秒级直播。</p>`;
+  if(LIVE.news?.length)h+=`<h4>官方公告</h4><ul class="news">${LIVE.news.map(n=>{const u=String(n.url||'');return `<li><a href="${u.startsWith('https://')?esc(u):'#'}" target="_blank" rel="noopener"><small>${esc(n.date)}${n.tag?' · '+esc(n.tag):''}</small><span>${esc(n.title)}</span></a></li>`}).join('')}</ul>`;
   return h;
 }
 function fujimiIdx(v){return Math.min(10,Math.ceil(v/10)+1)}
@@ -703,10 +705,10 @@ function fujimiHTML(){
   g+=row('北侧<br>山梨',N)+row('南侧<br>静冈',S);
   const cur=(arr)=>{const r=arr.find(r=>r[0].slice(0,10)===todayKey&&r[0].slice(11,13)===slotNow);return r?fujimiIdx(r[1]):null};
   const cn=cur(N),cs=cur(S);
-  return `<h4>能不能看到富士山（富士見予報）</h4>
+  return `<h4>能不能看到富士山</h4>
   ${cn!=null?`<div class="fjnow"><span>今天${slotNow==='09'?'上午':'下午'}　北侧 <b>${cn}</b><span style="color:var(--mute)">/10</span></span><span>南侧 <b>${cs??'—'}</b><span style="color:var(--mute)">/10</span></span></div>`:''}
   <div style="overflow-x:auto"><div class="fj" role="table" aria-label="未来7天上午和下午看到富士山的可能性指数">${g}</div></div>
-  <p class="src" style="margin-top:6px">指数 1–10，越大越可能从山脚看到富士山（不是云量，是“看得到”的可能性）。北侧是从山梨县河口湖、山中湖一带看，南侧是从静冈县富士市、沼津一带看。每天 16 点左右更新。来源：<a href="https://fuji-san.info/zh-cn/index.html" target="_blank" rel="noopener">富士見予報</a>（応用気象エンジニアリング，版权归该公司）。</p>`;
+  <p class="src" style="margin-top:6px">指数 1–10，越大越可能从山脚看到富士山（不是云量，是“看得到”的可能性）。北侧是从山梨县河口湖、山中湖一带看，南侧是从静冈县富士市、沼津一带看。</p>`;
 }
 function refreshBtn(){
   if(ghState==='on'&&ghServer)return `<button class="btn" id="refresh">↻ 立即更新</button>`;
@@ -715,7 +717,8 @@ function refreshBtn(){
   return '';
 }
 function srcLine(){
-  if(ghState==='on'&&liveSrc==='github')return '来源：GitHub 自动更新（每天中午 12 点抓取一次；想看最新的就点「立即更新」）';
+  if(liveSrc==='pages')return '每天日本时间中午 12 点自动更新一次。';
+  if(ghState==='on'&&liveSrc==='github')return '每天中午 12 点自动更新；想看最新的就点「立即更新」。';
   if(ghState==='on')return '已连接 GitHub，正在读取自动更新的数据…';
   if(ghState==='ask')return '现在显示的是手动更新的快照。点「开启自动更新」，允许页面通过你的 GitHub 连接读取每天自动更新的数据，还能随时点「立即更新」（都不消耗 Claude 额度）。';
   return '';
